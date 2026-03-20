@@ -99,7 +99,7 @@ func (c *Client) EvaluatePolicy(ctx context.Context, rule string, inputJSON stri
 	req := grpcFrame([]byte(payload))
 
 	var respBytes []byte
-	err := c.conn.Invoke(ctx, "/coresdk.v1.PolicyService/EvaluatePolicy", req, &respBytes)
+	err := c.conn.Invoke(ctx, "/coresdk.v1.PolicyService/Evaluate", req, &respBytes)
 	if err != nil {
 		return false, fmt.Errorf("coresdk: EvaluatePolicy: %w", err)
 	}
