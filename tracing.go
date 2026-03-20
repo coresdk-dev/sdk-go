@@ -19,7 +19,8 @@ func Trace(ctx context.Context, intent string, fn func(ctx context.Context) erro
 }
 
 // SetupOTel configures a basic OTel TracerProvider if none exists.
-func SetupOTel(serviceName string) {
+// serviceName will be used when OTLP exporter configuration is implemented.
+func SetupOTel(_ string) {
 	if otel.GetTracerProvider() != nil {
 		return
 	}

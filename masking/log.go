@@ -5,27 +5,31 @@ import (
 	"log/slog"
 )
 
-// MaskingSlogHandler wraps slog.Handler to redact PII from log records.
-type MaskingSlogHandler struct {
+// SlogHandler wraps slog.Handler to redact PII from log records before they are written.
+type SlogHandler struct {
 	inner slog.Handler
 }
 
-func NewMaskingSlogHandler(inner slog.Handler) *MaskingSlogHandler {
-	return &MaskingSlogHandler{inner: inner}
+// NewSlogHandler wraps inner with PII redaction applied to every log record.
+func NewSlogHandler(inner slog.Handler) *SlogHandler {
+	return &SlogHandler{inner: inner}
 }
 
-func (h *MaskingSlogHandler) Enabled(ctx context.Context, level slog.Level) bool {
+// Enabled reports whether the handler handles records at the given level.
+func (h *SlogHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return h.inner.Enabled(ctx, level)
 }
 
-func (h *MaskingSlogHandler) Handle(ctx context.Context, r slog.Record) error {
+// Handle redacts PII from record attributes before delegating to the inner handler.
+func (h *SlogHandler) Handle(ctx context.Context, r slog.Record) error {
 	masked := slog.NewRecord(r.Time, r.Level, r.Message, r.PC)
 	r.Attrs(func(a slog.Attr) bool {
-		if IsBlockedField(a.Key) {
+		switch {
+		case IsBlockedField(a.Key):
 			masked.AddAttrs(slog.String(a.Key, redacted))
-		} else if a.Value.Kind() == slog.KindString {
+		case a.Value.Kind() == slog.KindString:
 			masked.AddAttrs(slog.String(a.Key, MaskValue(a.Value.String())))
-		} else {
+		default:
 			masked.AddAttrs(a)
 		}
 		return true
@@ -33,10 +37,12 @@ func (h *MaskingSlogHandler) Handle(ctx context.Context, r slog.Record) error {
 	return h.inner.Handle(ctx, masked)
 }
 
-func (h *MaskingSlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &MaskingSlogHandler{inner: h.inner.WithAttrs(attrs)}
+// WithAttrs returns a new SlogHandler with the given attributes pre-set.
+func (h *SlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &SlogHandler{inner: h.inner.WithAttrs(attrs)}
 }
 
-func (h *MaskingSlogHandler) WithGroup(name string) slog.Handler {
-	return &MaskingSlogHandler{inner: h.inner.WithGroup(name)}
+// WithGroup returns a new SlogHandler that qualifies keys with the given group name.
+func (h *SlogHandler) WithGroup(name string) slog.Handler {
+	return &SlogHandler{inner: h.inner.WithGroup(name)}
 }

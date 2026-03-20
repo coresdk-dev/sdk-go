@@ -3,6 +3,7 @@ package middleware
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -88,13 +89,19 @@ func extractBearer(header string) string {
 	return ""
 }
 
+// writeProblem writes an RFC 9457 problem JSON response.
+// status is always 401 at current call sites; the parameter is retained for future use.
+//
+//nolint:unparam // status is intentionally kept as a parameter for extensibility
 func writeProblem(w http.ResponseWriter, status int, title, detail string) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]any{
+	if err := json.NewEncoder(w).Encode(map[string]any{
 		"type":   "https://coresdk.io/errors/unauthorized",
 		"title":  title,
 		"status": status,
 		"detail": detail,
-	})
+	}); err != nil {
+		slog.Error("coresdk: failed to write problem detail", "error", err)
+	}
 }

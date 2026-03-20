@@ -32,9 +32,10 @@ func NewClient(cfg *Config) (*Client, error) {
 		}),
 	}
 
-	if cfg.DevMode || cfg.TLSCert == "" {
+	switch {
+	case cfg.DevMode || cfg.TLSCert == "":
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	} else if cfg.TLSCert != "" && cfg.TLSKey != "" && cfg.TLSCA != "" {
+	case cfg.TLSCert != "" && cfg.TLSKey != "" && cfg.TLSCA != "":
 		cert, err := tls.LoadX509KeyPair(cfg.TLSCert, cfg.TLSKey)
 		if err != nil {
 			return nil, fmt.Errorf("coresdk: load client cert: %w", err)
@@ -53,13 +54,13 @@ func NewClient(cfg *Config) (*Client, error) {
 			MinVersion:   tls.VersionTLS13,
 		}
 		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
-	} else {
+	default:
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
-	conn, err := grpc.Dial(cfg.SidecarAddr, opts...)
+	conn, err := grpc.NewClient(cfg.SidecarAddr, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("coresdk: grpc.Dial(%s): %w", cfg.SidecarAddr, err)
+		return nil, fmt.Errorf("coresdk: grpc.NewClient(%s): %w", cfg.SidecarAddr, err)
 	}
 	return &Client{conn: conn, config: cfg}, nil
 }
@@ -111,6 +112,7 @@ func (c *Client) EvaluatePolicy(ctx context.Context, rule string, inputJSON stri
 	return decodeBool(fields, 1), nil
 }
 
+// Close tears down the underlying gRPC connection.
 func (c *Client) Close() error {
 	return c.conn.Close()
 }
@@ -130,9 +132,12 @@ func encodeString(fieldNum int, value string) string {
 }
 
 func grpcFrame(payload []byte) []byte {
-	frame := make([]byte, 5+len(payload))
+	n := len(payload)
+	// gRPC framing: 4-byte big-endian message length (max ~4 GiB).
+	// len(payload) fits in uint32 for any realistic message.
+	frame := make([]byte, 5+n)
 	frame[0] = 0 // not compressed
-	binary.BigEndian.PutUint32(frame[1:5], uint32(len(payload)))
+	binary.BigEndian.PutUint32(frame[1:5], uint32(n)) //nolint:gosec // len is non-negative and bounded by gRPC max message size
 	copy(frame[5:], payload)
 	return frame
 }
@@ -168,7 +173,7 @@ func decodeFields(data []byte) map[int][][]byte {
 			break
 		}
 		i += n
-		fieldNum := int(tag >> 3)
+		fieldNum := int(tag >> 3) //nolint:gosec // tag field number fits in int
 		wireType := tag & 0x7
 		switch wireType {
 		case 0: // varint
@@ -186,8 +191,9 @@ func decodeFields(data []byte) map[int][][]byte {
 				goto done
 			}
 			i += n2
-			fields[fieldNum] = append(fields[fieldNum], data[i:i+int(length)])
-			i += int(length)
+			msgLen := int(length) //nolint:gosec // protobuf length-delimited fields fit in int
+			fields[fieldNum] = append(fields[fieldNum], data[i:i+msgLen])
+			i += msgLen
 		default:
 			goto done
 		}

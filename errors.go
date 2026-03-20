@@ -3,6 +3,7 @@ package coresdk
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 )
 
@@ -33,7 +34,9 @@ func (p *ProblemDetail) JSON() []byte {
 func (p *ProblemDetail) WriteHTTP(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(p.Status)
-	json.NewEncoder(w).Encode(p)
+	if err := json.NewEncoder(w).Encode(p); err != nil {
+		slog.Error("coresdk: failed to write problem detail", "error", err)
+	}
 }
 
 // Unauthorized returns a 401 ProblemDetail.

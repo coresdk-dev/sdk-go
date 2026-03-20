@@ -43,6 +43,7 @@ func IsBlockedField(name string) bool {
 // Register as SpanProcessor (not SpanExporter) so masking fires before queue.
 type PIIMaskingSpanProcessor struct{}
 
+// NewPIIMaskingSpanProcessor creates a SpanProcessor that redacts PII from span attributes.
 func NewPIIMaskingSpanProcessor() *PIIMaskingSpanProcessor {
 	return &PIIMaskingSpanProcessor{}
 }
@@ -68,12 +69,13 @@ func MaskAttributes(attrs []attribute.KeyValue) []attribute.KeyValue {
 	result := make([]attribute.KeyValue, 0, len(attrs))
 	for _, kv := range attrs {
 		key := string(kv.Key)
-		if IsBlockedField(key) {
+		switch {
+		case IsBlockedField(key):
 			result = append(result, attribute.String(key, redacted))
-		} else if kv.Value.Type() == attribute.STRING {
+		case kv.Value.Type() == attribute.STRING:
 			masked := MaskValue(kv.Value.AsString())
 			result = append(result, attribute.String(key, masked))
-		} else {
+		default:
 			result = append(result, kv)
 		}
 	}
