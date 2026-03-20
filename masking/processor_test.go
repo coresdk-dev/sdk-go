@@ -3,7 +3,7 @@ package masking_test
 import (
 	"testing"
 
-	"github.com/coresdk/go-sdk/masking"
+	"github.com/coresdk-dev/sdk-go/masking"
 	"go.opentelemetry.io/otel/attribute"
 )
 

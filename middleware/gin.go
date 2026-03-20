@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	coresdk "github.com/coresdk/go-sdk"
+	coresdk "github.com/coresdk-dev/sdk-go"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 )

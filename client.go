@@ -83,15 +83,12 @@ func (c *Client) ValidateToken(ctx context.Context, token string) (*Claims, erro
 
 	allowed := decodeBool(fields, 1)
 	subject := decodeString(fields, 2)
-	tenantID := decodeString(fields, 3)
-	if tenantID == "" {
-		tenantID = c.config.TenantID
-	}
+	roles := decodeRepeatedString(fields, 3)
 
 	return &Claims{
 		Subject:  subject,
-		TenantID: tenantID,
-		Roles:    []string{},
+		TenantID: c.config.TenantID,
+		Roles:    roles,
 		FailOpen: !allowed,
 	}, nil
 }
@@ -222,6 +219,18 @@ func decodeString(fields map[int][][]byte, fieldNum int) string {
 		return ""
 	}
 	return string(vals[0])
+}
+
+func decodeRepeatedString(fields map[int][][]byte, fieldNum int) []string {
+	vals, ok := fields[fieldNum]
+	if !ok || len(vals) == 0 {
+		return []string{}
+	}
+	result := make([]string, len(vals))
+	for i, v := range vals {
+		result[i] = string(v)
+	}
+	return result
 }
 
 func decodeBool(fields map[int][][]byte, fieldNum int) bool {

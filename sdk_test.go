@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	coresdk "github.com/coresdk/go-sdk"
-	"github.com/coresdk/go-sdk/masking"
+	coresdk "github.com/coresdk-dev/sdk-go"
+	"github.com/coresdk-dev/sdk-go/masking"
 )
 
 func TestMockSDK_AllowsByDefault(t *testing.T) {

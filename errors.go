@@ -49,6 +49,27 @@ func Unauthorized(detail string) *ProblemDetail {
 	}
 }
 
+// CoreSDKError wraps a ProblemDetail with an optional cause for errors.Is/As chains.
+type CoreSDKError struct {
+	Problem *ProblemDetail
+	Cause   error
+}
+
+func (e *CoreSDKError) Error() string {
+	if e.Problem != nil {
+		if e.Cause != nil {
+			return fmt.Sprintf("%s: %v", e.Problem.Error(), e.Cause)
+		}
+		return e.Problem.Error()
+	}
+	if e.Cause != nil {
+		return e.Cause.Error()
+	}
+	return "coresdk: unknown error"
+}
+
+func (e *CoreSDKError) Unwrap() error { return e.Cause }
+
 // Forbidden returns a 403 ProblemDetail.
 func Forbidden(detail string) *ProblemDetail {
 	return &ProblemDetail{

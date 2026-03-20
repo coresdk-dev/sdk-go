@@ -4,13 +4,20 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	coresdk "github.com/coresdk/go-sdk"
+	coresdk "github.com/coresdk-dev/sdk-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // Echo returns an echo middleware for CoreSDK auth.
 func Echo(sdk *coresdk.SDK) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			// W3C trace context propagation
+			ctx := otel.GetTextMapPropagator().Extract(c.Request().Context(),
+				propagation.HeaderCarrier(c.Request().Header))
+			c.SetRequest(c.Request().WithContext(ctx))
+
 			token := extractBearer(c.Request().Header.Get("Authorization"))
 			if token == "" {
 				if sdk.Config.DevMode {
