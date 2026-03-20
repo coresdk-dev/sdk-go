@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 )
 
 // SDK is the main entry point. Initialize once per process.
@@ -80,6 +81,46 @@ func (s *SDK) EvaluatePolicy(ctx context.Context, rule string, input map[string]
 		return true, nil
 	}
 	return result, nil
+}
+
+// IsEnabled checks whether a feature flag is enabled by querying the control plane.
+// Returns true (fail-open) if no control plane is configured or on error with FailMode "open".
+func (s *SDK) IsEnabled(ctx context.Context, flagKey string) (bool, error) {
+	if s.Config.ControlPlaneURL == "" {
+		return true, nil
+	}
+	url := s.Config.ControlPlaneURL + "/api/v1/flags"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return s.flagFailOpen(err)
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return s.flagFailOpen(err)
+	}
+	defer resp.Body.Close()
+	var result map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return s.flagFailOpen(err)
+	}
+	flags, _ := result["flags"].([]any)
+	for _, f := range flags {
+		fm, _ := f.(map[string]any)
+		if fm["key"] == flagKey || fm["name"] == flagKey {
+			if enabled, ok := fm["enabled"].(bool); ok {
+				return enabled, nil
+			}
+		}
+	}
+	return true, nil // unknown flag -> fail-open
+}
+
+func (s *SDK) flagFailOpen(err error) (bool, error) {
+	if s.Config.FailMode == "closed" {
+		return false, err
+	}
+	return true, nil
 }
 
 // Claims holds validated JWT claims.
