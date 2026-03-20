@@ -1,4 +1,4 @@
-module github.com/coresdk/go-sdk
+module github.com/coresdk-dev/sdk-go
 
 go 1.25.0
 

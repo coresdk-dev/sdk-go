@@ -1,0 +1,9 @@
+/target
+Cargo.lock
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+.DS_Store
