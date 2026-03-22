@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/metadata"
 )
 
 // Client wraps the gRPC channel to the sidecar.
@@ -31,6 +32,18 @@ func NewClient(cfg *Config) (*Client, error) {
 			PermitWithoutStream: true,
 		}),
 	}
+
+	// Attach x-service-token and x-service-name to every outgoing RPC
+	opts = append(opts, grpc.WithUnaryInterceptor(
+		func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, callOpts ...grpc.CallOption) error {
+			md := metadata.Pairs("x-service-name", cfg.ServiceName)
+			if cfg.ServiceToken != "" {
+				md.Append("x-service-token", cfg.ServiceToken)
+			}
+			ctx = metadata.NewOutgoingContext(ctx, md)
+			return invoker(ctx, method, req, reply, cc, callOpts...)
+		},
+	))
 
 	switch {
 	case cfg.DevMode || cfg.TLSCert == "":
@@ -107,6 +120,111 @@ func (c *Client) EvaluatePolicy(ctx context.Context, rule string, inputJSON stri
 	body := grpcUnframe(respBytes)
 	fields := decodeFields(body)
 	return decodeBool(fields, 1), nil
+}
+
+// RevokeToken calls AuthService.RevokeToken on the sidecar.
+func (c *Client) RevokeToken(ctx context.Context, token string) error {
+	payload := encodeString(1, token) + encodeString(2, c.config.TenantID)
+	req := grpcFrame([]byte(payload))
+
+	var respBytes []byte
+	err := c.conn.Invoke(ctx, "/coresdk.v1.AuthService/RevokeToken", req, &respBytes)
+	if err != nil {
+		return fmt.Errorf("coresdk: RevokeToken: %w", err)
+	}
+	return nil
+}
+
+// IsRevoked calls AuthService.IsRevoked on the sidecar.
+func (c *Client) IsRevoked(ctx context.Context, token string) (bool, error) {
+	payload := encodeString(1, token) + encodeString(2, c.config.TenantID)
+	req := grpcFrame([]byte(payload))
+
+	var respBytes []byte
+	err := c.conn.Invoke(ctx, "/coresdk.v1.AuthService/IsRevoked", req, &respBytes)
+	if err != nil {
+		return false, fmt.Errorf("coresdk: IsRevoked: %w", err)
+	}
+
+	body := grpcUnframe(respBytes)
+	fields := decodeFields(body)
+	return decodeBool(fields, 1), nil
+}
+
+// CheckRateLimit calls RateLimitService.Check on the sidecar.
+func (c *Client) CheckRateLimit(ctx context.Context, key string) (*RateLimitDecision, error) {
+	payload := encodeString(1, key) + encodeString(2, c.config.TenantID)
+	req := grpcFrame([]byte(payload))
+
+	var respBytes []byte
+	err := c.conn.Invoke(ctx, "/coresdk.v1.RateLimitService/Check", req, &respBytes)
+	if err != nil {
+		return nil, fmt.Errorf("coresdk: CheckRateLimit: %w", err)
+	}
+
+	body := grpcUnframe(respBytes)
+	fields := decodeFields(body)
+	return &RateLimitDecision{
+		Allowed:   decodeBool(fields, 1),
+		Remaining: decodeInt64(fields, 2),
+		ResetAt:   decodeInt64(fields, 3),
+	}, nil
+}
+
+// EmitAuditEvent calls AuditService.Emit on the sidecar.
+func (c *Client) EmitAuditEvent(ctx context.Context, action, userID, outcome string, metadata map[string]string) error {
+	payload := encodeString(1, action) + encodeString(2, userID) + encodeString(3, outcome) + encodeString(4, c.config.TenantID)
+	// metadata as repeated key=value pairs in field 5
+	for k, v := range metadata {
+		payload += encodeString(5, k+"="+v)
+	}
+	req := grpcFrame([]byte(payload))
+
+	var respBytes []byte
+	err := c.conn.Invoke(ctx, "/coresdk.v1.AuditService/Emit", req, &respBytes)
+	if err != nil {
+		return fmt.Errorf("coresdk: EmitAuditEvent: %w", err)
+	}
+	return nil
+}
+
+// EvaluateFlag calls FlagService.Evaluate on the sidecar.
+func (c *Client) EvaluateFlag(ctx context.Context, key, userID string) (*FlagDecision, error) {
+	payload := encodeString(1, key) + encodeString(2, userID) + encodeString(3, c.config.TenantID)
+	req := grpcFrame([]byte(payload))
+
+	var respBytes []byte
+	err := c.conn.Invoke(ctx, "/coresdk.v1.FlagService/Evaluate", req, &respBytes)
+	if err != nil {
+		return nil, fmt.Errorf("coresdk: EvaluateFlag: %w", err)
+	}
+
+	body := grpcUnframe(respBytes)
+	fields := decodeFields(body)
+	return &FlagDecision{
+		Enabled: decodeBool(fields, 1),
+		Key:     decodeString(fields, 2),
+	}, nil
+}
+
+// CheckEntitlement calls LicenseService.CheckEntitlement on the sidecar.
+func (c *Client) CheckEntitlement(ctx context.Context, key string) (*LicenseInfo, error) {
+	payload := encodeString(1, key) + encodeString(2, c.config.TenantID)
+	req := grpcFrame([]byte(payload))
+
+	var respBytes []byte
+	err := c.conn.Invoke(ctx, "/coresdk.v1.LicenseService/CheckEntitlement", req, &respBytes)
+	if err != nil {
+		return nil, fmt.Errorf("coresdk: CheckEntitlement: %w", err)
+	}
+
+	body := grpcUnframe(respBytes)
+	fields := decodeFields(body)
+	return &LicenseInfo{
+		Allowed:  decodeBool(fields, 1),
+		Plan:     decodeString(fields, 2),
+		Features: decodeRepeatedString(fields, 3),
+	}, nil
 }
 
 // Close tears down the underlying gRPC connection.
@@ -231,6 +349,29 @@ func decodeRepeatedString(fields map[int][][]byte, fieldNum int) []string {
 		result[i] = string(v)
 	}
 	return result
+}
+
+func decodeInt64(fields map[int][][]byte, fieldNum int) int64 {
+	vals, ok := fields[fieldNum]
+	if !ok || len(vals) == 0 {
+		return 0
+	}
+	if len(vals[0]) >= 8 {
+		return int64(binary.LittleEndian.Uint64(vals[0])) //nolint:gosec // varint stored as uint64
+	}
+	if len(vals[0]) > 0 {
+		return int64(vals[0][0])
+	}
+	return 0
+}
+
+func encodeVarint(fieldNum int, value uint64) string {
+	if value == 0 {
+		return ""
+	}
+	tag := varint(uint64(fieldNum<<3 | 0))
+	val := varint(value)
+	return string(tag) + string(val)
 }
 
 func decodeBool(fields map[int][][]byte, fieldNum int) bool {

@@ -7,6 +7,7 @@ type Config struct {
 	SidecarAddr     string
 	TenantID        string
 	ServiceName     string
+	ServiceToken    string // CORESDK_SERVICE_TOKEN — pre-shared secret for sidecar auth
 	FailMode        string // "open" or "closed"
 	DevMode         bool
 	ControlPlaneURL string
@@ -21,8 +22,9 @@ func ConfigFromEnv() *Config {
 	return &Config{
 		SidecarAddr: envOrDefault("CORESDK_SIDECAR_ADDR", "localhost:50051"),
 		TenantID:    envOrDefault("CORESDK_TENANT_ID", "default"),
-		ServiceName: envOrDefault("CORESDK_SERVICE_NAME", "unknown-service"),
-		FailMode:    envOrDefault("CORESDK_FAIL_MODE", "open"),
+		ServiceName:  envOrDefault("CORESDK_SERVICE_NAME", "unknown-service"),
+		ServiceToken: os.Getenv("CORESDK_SERVICE_TOKEN"),
+		FailMode:     envOrDefault("CORESDK_FAIL_MODE", "open"),
 		DevMode:         devMode,
 		ControlPlaneURL: os.Getenv("CORESDK_CONTROL_PLANE_URL"),
 		TLSCert:         os.Getenv("CORESDK_TLS_CERT"),
