@@ -30,13 +30,20 @@ type AuthDecision struct {
 
 // MockSDK is a test double for SDK. Tracks calls for assertion.
 type MockSDK struct {
-	Config         *Config
-	cfg            MockConfig
-	AllowAll       bool
-	Flags          map[string]bool
-	Spans          []MockSpan
-	AuthorizeCalls []string
-	PolicyCalls    []string
+	Config              *Config
+	cfg                 MockConfig
+	AllowAll            bool
+	Flags               map[string]bool
+	Spans               []MockSpan
+	AuthorizeCalls      []string
+	PolicyCalls         []string
+	RevokeTokenCalls    []string
+	IsRevokedCalls      []string
+	RateLimitCalls      []string
+	AuditCalls          []string
+	FlagCalls           []string
+	EntitlementCalls    []string
+	RevokedTokens       map[string]bool
 }
 
 // NewMockSDK creates a MockSDK. AllowAll defaults to true (DenyAll=false).
@@ -49,10 +56,11 @@ func NewMockSDK(cfg MockConfig) *MockSDK {
 		}
 	}
 	return &MockSDK{
-		Config:   &Config{FailMode: "open"},
-		cfg:      cfg,
-		AllowAll: !cfg.DenyAll,
-		Flags:    map[string]bool{},
+		Config:        &Config{FailMode: "open"},
+		cfg:           cfg,
+		AllowAll:      !cfg.DenyAll,
+		Flags:         map[string]bool{},
+		RevokedTokens: map[string]bool{},
 	}
 }
 
@@ -89,6 +97,65 @@ func (m *MockSDK) IsEnabled(flagKey, _ string) bool {
 		return v
 	}
 	return m.AllowAll
+}
+
+// RevokeToken mock — records the call and adds token to RevokedTokens.
+func (m *MockSDK) RevokeToken(_ context.Context, token string) error {
+	m.RevokeTokenCalls = append(m.RevokeTokenCalls, token)
+	if m.cfg.DenyAll {
+		return fmt.Errorf("coresdk: mock denied")
+	}
+	m.RevokedTokens[token] = true
+	return nil
+}
+
+// IsRevoked mock — checks the RevokedTokens map.
+func (m *MockSDK) IsRevoked(_ context.Context, token string) (bool, error) {
+	m.IsRevokedCalls = append(m.IsRevokedCalls, token)
+	if m.cfg.DenyAll {
+		return false, fmt.Errorf("coresdk: mock denied")
+	}
+	return m.RevokedTokens[token], nil
+}
+
+// CheckRateLimit mock — returns allowed based on AllowAll.
+func (m *MockSDK) CheckRateLimit(_ context.Context, key string) (*RateLimitDecision, error) {
+	m.RateLimitCalls = append(m.RateLimitCalls, key)
+	if m.cfg.DenyAll {
+		return &RateLimitDecision{Allowed: false}, nil
+	}
+	return &RateLimitDecision{Allowed: true, Remaining: 100, ResetAt: 0}, nil
+}
+
+// EmitAuditEvent mock — records the call.
+func (m *MockSDK) EmitAuditEvent(_ context.Context, action, userID, outcome string, _ map[string]string) error {
+	m.AuditCalls = append(m.AuditCalls, action+"|"+userID+"|"+outcome)
+	if m.cfg.DenyAll {
+		return fmt.Errorf("coresdk: mock denied")
+	}
+	return nil
+}
+
+// EvaluateFlag mock — checks the Flags map, falls back to AllowAll.
+func (m *MockSDK) EvaluateFlag(_ context.Context, key, _ string) (*FlagDecision, error) {
+	m.FlagCalls = append(m.FlagCalls, key)
+	if m.cfg.DenyAll {
+		return &FlagDecision{Enabled: false, Key: key}, nil
+	}
+	enabled := m.AllowAll
+	if v, ok := m.Flags[key]; ok {
+		enabled = v
+	}
+	return &FlagDecision{Enabled: enabled, Key: key}, nil
+}
+
+// CheckEntitlement mock — returns allowed based on AllowAll.
+func (m *MockSDK) CheckEntitlement(_ context.Context, key string) (*LicenseInfo, error) {
+	m.EntitlementCalls = append(m.EntitlementCalls, key)
+	if m.cfg.DenyAll {
+		return &LicenseInfo{Allowed: false}, nil
+	}
+	return &LicenseInfo{Allowed: true, Plan: "enterprise", Features: []string{key}}, nil
 }
 
 // AssertNoPII fails t if any span attribute value contains unredacted PII-like patterns
