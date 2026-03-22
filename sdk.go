@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net/http"
 )
 
 // SDK is the main entry point. Initialize once per process.
@@ -83,44 +82,155 @@ func (s *SDK) EvaluatePolicy(ctx context.Context, rule string, input map[string]
 	return result, nil
 }
 
-// IsEnabled checks whether a feature flag is enabled by querying the control plane.
-// Returns true (fail-open) if no control plane is configured or on error with FailMode "open".
+// IsEnabled checks whether a feature flag is enabled via the sidecar gRPC service.
+// Delegates to EvaluateFlag for the actual gRPC call.
+// Returns true (fail-open) when FailMode == "open" and sidecar is unreachable.
 func (s *SDK) IsEnabled(ctx context.Context, flagKey string) (bool, error) {
-	if s.Config.ControlPlaneURL == "" {
-		return true, nil
-	}
-	url := s.Config.ControlPlaneURL + "/api/v1/flags"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	result, err := s.EvaluateFlag(ctx, flagKey, "")
 	if err != nil {
-		return s.flagFailOpen(err)
-	}
-	req.Header.Set("Accept", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return s.flagFailOpen(err)
-	}
-	defer resp.Body.Close()
-	var result map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return s.flagFailOpen(err)
-	}
-	flags, _ := result["flags"].([]any)
-	for _, f := range flags {
-		fm, _ := f.(map[string]any)
-		if fm["key"] == flagKey || fm["name"] == flagKey {
-			if enabled, ok := fm["enabled"].(bool); ok {
-				return enabled, nil
-			}
-		}
-	}
-	return true, nil // unknown flag -> fail-open
-}
-
-func (s *SDK) flagFailOpen(err error) (bool, error) {
-	if s.Config.FailMode == "closed" {
 		return false, err
 	}
-	return true, nil
+	return result.Enabled, nil
+}
+
+// RevokeToken revokes a JWT token via the sidecar.
+func (s *SDK) RevokeToken(ctx context.Context, token string) error {
+	if s.client == nil {
+		if s.Config.FailMode == "closed" {
+			return fmt.Errorf("coresdk: sidecar unreachable (fail-closed)")
+		}
+		slog.Warn("coresdk: revoke_token fail-open (no client)")
+		return nil
+	}
+	err := s.client.RevokeToken(ctx, token)
+	if err != nil {
+		if s.Config.FailMode == "closed" {
+			return fmt.Errorf("coresdk: revoke_token failed (fail-closed): %w", err)
+		}
+		slog.Warn("coresdk: revoke_token fail-open", "error", err)
+		return nil
+	}
+	return nil
+}
+
+// IsRevoked checks whether a token has been revoked.
+func (s *SDK) IsRevoked(ctx context.Context, token string) (bool, error) {
+	if s.client == nil {
+		if s.Config.FailMode == "closed" {
+			return false, fmt.Errorf("coresdk: sidecar unreachable (fail-closed)")
+		}
+		slog.Warn("coresdk: is_revoked fail-open (no client)")
+		return false, nil
+	}
+	revoked, err := s.client.IsRevoked(ctx, token)
+	if err != nil {
+		if s.Config.FailMode == "closed" {
+			return false, fmt.Errorf("coresdk: is_revoked failed (fail-closed): %w", err)
+		}
+		slog.Warn("coresdk: is_revoked fail-open", "error", err)
+		return false, nil
+	}
+	return revoked, nil
+}
+
+// CheckRateLimit checks a rate limit key via the sidecar.
+func (s *SDK) CheckRateLimit(ctx context.Context, key string) (*RateLimitDecision, error) {
+	if s.client == nil {
+		if s.Config.FailMode == "closed" {
+			return nil, fmt.Errorf("coresdk: sidecar unreachable (fail-closed)")
+		}
+		slog.Warn("coresdk: check_rate_limit fail-open (no client)")
+		return &RateLimitDecision{Allowed: true}, nil
+	}
+	result, err := s.client.CheckRateLimit(ctx, key)
+	if err != nil {
+		if s.Config.FailMode == "closed" {
+			return nil, fmt.Errorf("coresdk: check_rate_limit failed (fail-closed): %w", err)
+		}
+		slog.Warn("coresdk: check_rate_limit fail-open", "error", err)
+		return &RateLimitDecision{Allowed: true}, nil
+	}
+	return result, nil
+}
+
+// EmitAuditEvent emits an audit event via the sidecar.
+func (s *SDK) EmitAuditEvent(ctx context.Context, action, userID, outcome string, metadata map[string]string) error {
+	if s.client == nil {
+		if s.Config.FailMode == "closed" {
+			return fmt.Errorf("coresdk: sidecar unreachable (fail-closed)")
+		}
+		slog.Warn("coresdk: emit_audit_event fail-open (no client)")
+		return nil
+	}
+	err := s.client.EmitAuditEvent(ctx, action, userID, outcome, metadata)
+	if err != nil {
+		if s.Config.FailMode == "closed" {
+			return fmt.Errorf("coresdk: emit_audit_event failed (fail-closed): %w", err)
+		}
+		slog.Warn("coresdk: emit_audit_event fail-open", "error", err)
+		return nil
+	}
+	return nil
+}
+
+// EvaluateFlag evaluates a feature flag via the sidecar.
+func (s *SDK) EvaluateFlag(ctx context.Context, key, userID string) (*FlagDecision, error) {
+	if s.client == nil {
+		if s.Config.FailMode == "closed" {
+			return nil, fmt.Errorf("coresdk: sidecar unreachable (fail-closed)")
+		}
+		slog.Warn("coresdk: evaluate_flag fail-open (no client)")
+		return &FlagDecision{Enabled: true, Key: key}, nil
+	}
+	result, err := s.client.EvaluateFlag(ctx, key, userID)
+	if err != nil {
+		if s.Config.FailMode == "closed" {
+			return nil, fmt.Errorf("coresdk: evaluate_flag failed (fail-closed): %w", err)
+		}
+		slog.Warn("coresdk: evaluate_flag fail-open", "error", err)
+		return &FlagDecision{Enabled: true, Key: key}, nil
+	}
+	return result, nil
+}
+
+// CheckEntitlement checks a license entitlement via the sidecar.
+func (s *SDK) CheckEntitlement(ctx context.Context, key string) (*LicenseInfo, error) {
+	if s.client == nil {
+		if s.Config.FailMode == "closed" {
+			return nil, fmt.Errorf("coresdk: sidecar unreachable (fail-closed)")
+		}
+		slog.Warn("coresdk: check_entitlement fail-open (no client)")
+		return &LicenseInfo{Allowed: true}, nil
+	}
+	result, err := s.client.CheckEntitlement(ctx, key)
+	if err != nil {
+		if s.Config.FailMode == "closed" {
+			return nil, fmt.Errorf("coresdk: check_entitlement failed (fail-closed): %w", err)
+		}
+		slog.Warn("coresdk: check_entitlement fail-open", "error", err)
+		return &LicenseInfo{Allowed: true}, nil
+	}
+	return result, nil
+}
+
+// RateLimitDecision holds the result of a rate limit check.
+type RateLimitDecision struct {
+	Allowed   bool
+	Remaining int64
+	ResetAt   int64
+}
+
+// FlagDecision holds the result of a feature flag evaluation.
+type FlagDecision struct {
+	Enabled bool
+	Key     string
+}
+
+// LicenseInfo holds the result of a license entitlement check.
+type LicenseInfo struct {
+	Allowed  bool
+	Plan     string
+	Features []string
 }
 
 // Claims holds validated JWT claims.
