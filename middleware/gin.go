@@ -80,6 +80,15 @@ func Gin(sdk *coresdk.SDK) gin.HandlerFunc {
 		}
 
 		c.Set("coresdk_claims", claims)
+
+		// Inject tenant/user headers for downstream services
+		if claims.TenantID != "" {
+			c.Request.Header.Set("X-Tenant-ID", claims.TenantID)
+		}
+		if claims.Subject != "" {
+			c.Request.Header.Set("X-User-UUID", claims.Subject)
+		}
+
 		c.Next()
 	}
 }

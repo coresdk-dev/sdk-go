@@ -75,6 +75,14 @@ func NetHTTP(sdk *coresdk.SDK, excludePaths ...string) func(http.Handler) http.H
 				}
 				ctx = coresdk.WithClaims(ctx, claims)
 				r = r.WithContext(ctx)
+
+				// Inject tenant/user headers for downstream services
+				if claims.TenantID != "" {
+					r.Header.Set("X-Tenant-ID", claims.TenantID)
+				}
+				if claims.Subject != "" {
+					r.Header.Set("X-User-UUID", claims.Subject)
+				}
 			}
 
 			next.ServeHTTP(w, r)
