@@ -24,6 +24,7 @@ func (p *ProblemDetail) Error() string {
 	return fmt.Sprintf("[%d] %s", p.Status, p.Title)
 }
 
+// JSON serialises the ProblemDetail to its JSON representation.
 func (p *ProblemDetail) JSON() []byte {
 	b, _ := json.Marshal(p)
 	return b
@@ -49,13 +50,13 @@ func Unauthorized(detail string) *ProblemDetail {
 	}
 }
 
-// CoreSDKError wraps a ProblemDetail with an optional cause for errors.Is/As chains.
-type CoreSDKError struct {
+// SDKError wraps a ProblemDetail with an optional cause for errors.Is/As chains.
+type SDKError struct {
 	Problem *ProblemDetail
 	Cause   error
 }
 
-func (e *CoreSDKError) Error() string {
+func (e *SDKError) Error() string {
 	if e.Problem != nil {
 		if e.Cause != nil {
 			return fmt.Sprintf("%s: %v", e.Problem.Error(), e.Cause)
@@ -68,7 +69,12 @@ func (e *CoreSDKError) Error() string {
 	return "coresdk: unknown error"
 }
 
-func (e *CoreSDKError) Unwrap() error { return e.Cause }
+func (e *SDKError) Unwrap() error { return e.Cause }
+
+// CoreSDKError is a deprecated alias for SDKError kept for backwards compatibility.
+//
+// Deprecated: Use SDKError.
+type CoreSDKError = SDKError
 
 // Forbidden returns a 403 ProblemDetail.
 func Forbidden(detail string) *ProblemDetail {

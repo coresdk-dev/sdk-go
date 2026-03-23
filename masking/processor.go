@@ -61,7 +61,10 @@ func (p *PIIMaskingSpanProcessor) OnStart(_ context.Context, s sdktrace.ReadWrit
 // no-op here — all redaction happens in OnStart.
 func (p *PIIMaskingSpanProcessor) OnEnd(_ sdktrace.ReadOnlySpan) {}
 
-func (p *PIIMaskingSpanProcessor) Shutdown(_ context.Context) error   { return nil }
+// Shutdown flushes and stops the processor. No-op for this implementation.
+func (p *PIIMaskingSpanProcessor) Shutdown(_ context.Context) error { return nil }
+
+// ForceFlush exports any buffered spans. No-op for this implementation.
 func (p *PIIMaskingSpanProcessor) ForceFlush(_ context.Context) error { return nil }
 
 // MaskAttributes redacts PII from a map of span attributes.

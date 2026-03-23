@@ -365,14 +365,6 @@ func decodeInt64(fields map[int][][]byte, fieldNum int) int64 {
 	return 0
 }
 
-func encodeVarint(fieldNum int, value uint64) string {
-	if value == 0 {
-		return ""
-	}
-	tag := varint(uint64(fieldNum<<3 | 0))
-	val := varint(value)
-	return string(tag) + string(val)
-}
 
 func decodeBool(fields map[int][][]byte, fieldNum int) bool {
 	vals, ok := fields[fieldNum]
