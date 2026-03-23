@@ -2,6 +2,8 @@
 
 Go client for [CoreSDK](https://github.com/coresdk-dev/core-sdk) — JWT validation, policy evaluation, and feature flags via the CoreSDK sidecar.
 
+**New here?** The [Getting Started guide](GETTING-STARTED.md) takes you from zero to a working sidecar + SDK call in 15 minutes, with a **why** explanation at every step.
+
 ## Install
 
 ```bash
