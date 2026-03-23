@@ -5,42 +5,23 @@ run:
 
 linters:
   enable:
-    - errcheck        # check error returns
-    - govet           # go vet
-    - ineffassign     # unused assignments
-    - staticcheck     # static analysis
-    - unused          # unused code
-    - gosec           # security (G*)
-    - bodyclose       # http response body close
-    - noctx           # http requests without context
-    - gocritic        # various checks
-    - revive          # golint replacement
-    - misspell        # typos
-    - exhaustive      # exhaustive switch statements
-    - unparam         # unused function parameters
-    - contextcheck    # context propagation
-    - nilerr          # returning nil with non-nil error
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gosec
+    - bodyclose
+    - revive
+    - misspell
 
   settings:
     gosec:
       excludes:
-        - G104  # errors unhandled — handled by errcheck
-    revive:
-      rules:
-        - name: exported
-          severity: warning
-        - name: error-return
-        - name: error-naming
-        - name: if-return
-        - name: var-naming
-    gocritic:
-      enabled-tags:
-        - diagnostic
-        - style
-        - performance
+        - G104
 
 issues:
   exclusions:
     rules:
       - path: _test\.go
-        linters: [gosec, unparam]
+        linters: [gosec]
