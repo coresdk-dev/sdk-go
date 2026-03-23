@@ -21,25 +21,26 @@ linters:
     - contextcheck    # context propagation
     - nilerr          # returning nil with non-nil error
 
-linters-settings:
-  gosec:
-    excludes:
-      - G104  # errors unhandled — handled by errcheck
-  revive:
-    rules:
-      - name: exported
-        severity: warning
-      - name: error-return
-      - name: error-naming
-      - name: if-return
-      - name: var-naming
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - style
-      - performance
+  settings:
+    gosec:
+      excludes:
+        - G104  # errors unhandled — handled by errcheck
+    revive:
+      rules:
+        - name: exported
+          severity: warning
+        - name: error-return
+        - name: error-naming
+        - name: if-return
+        - name: var-naming
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
 
 issues:
-  exclude-rules:
-    - path: _test\.go
-      linters: [gosec, unparam]
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [gosec, unparam]
