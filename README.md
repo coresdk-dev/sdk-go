@@ -138,6 +138,20 @@ func TestMyHandler(t *testing.T) {
 }
 ```
 
+## Development
+
+```bash
+# Run tests (no sidecar needed for unit tests)
+make test-unit
+
+# Full check (vet + test)
+make check
+
+# Install golangci-lint and run linter
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+make lint
+```
+
 ## License
 
 See [LICENSE](../LICENSE).
