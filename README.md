@@ -152,6 +152,20 @@ go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 make lint
 ```
 
+## Sidecar
+
+```bash
+docker run --rm \
+  -e CORESDK_ENV=development \
+  -e CORESDK_SIDECAR_ADDR=[::]:50051 \
+  -p 50051:50051 \
+  -p 9091:9091 \
+  ghcr.io/coresdk-dev/sidecar:latest
+# Verify: curl http://localhost:9091/healthz  →  {"status":"ok"}
+```
+
+See the [Getting Started guide](GETTING-STARTED.md) for the full setup walkthrough.
+
 ## License
 
 See [LICENSE](../LICENSE).
