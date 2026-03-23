@@ -56,8 +56,8 @@ func TestMockSDK_FailModeOpenNoClient(t *testing.T) {
 
 func TestMockSDK_TracksCalls(t *testing.T) {
 	sdk := coresdk.NewMockSDK(coresdk.MockConfig{})
-	sdk.Authorize(context.Background(), "tok-abc")
-	sdk.Authorize(context.Background(), "tok-xyz")
+	_, _ = sdk.Authorize(context.Background(), "tok-abc")
+	_, _ = sdk.Authorize(context.Background(), "tok-xyz")
 	if len(sdk.AuthorizeCalls) != 2 {
 		t.Errorf("expected 2 calls, got %d", len(sdk.AuthorizeCalls))
 	}

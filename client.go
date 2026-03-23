@@ -241,7 +241,7 @@ func encodeString(fieldNum int, value string) string {
 		return ""
 	}
 	b := []byte(value)
-	tag := varint(uint64(fieldNum<<3 | 2))
+	tag := varint(uint64(fieldNum<<3 | 2)) //nolint:gosec
 	length := varint(uint64(len(b)))
 	return string(tag) + string(length) + value
 }

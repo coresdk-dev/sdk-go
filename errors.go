@@ -74,7 +74,7 @@ func (e *SDKError) Unwrap() error { return e.Cause }
 // CoreSDKError is a deprecated alias for SDKError kept for backwards compatibility.
 //
 // Deprecated: Use SDKError.
-type CoreSDKError = SDKError
+type CoreSDKError = SDKError //nolint:revive
 
 // Forbidden returns a 403 ProblemDetail.
 func Forbidden(detail string) *ProblemDetail {
