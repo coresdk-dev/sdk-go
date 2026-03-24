@@ -289,7 +289,7 @@ func (c *Client) Close() error {
 
 // encodeVarintField encodes a protobuf varint field (wire type 0).
 func encodeVarintField(fieldNum int, value uint64) []byte {
-	tag := varint(uint64(fieldNum<<3 | 0)) //nolint:gosec
+	tag := varint(uint64(fieldNum << 3)) //nolint:gosec
 	val := varint(value)
 	return append(tag, val...)
 }
