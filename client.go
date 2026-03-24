@@ -227,6 +227,57 @@ func (c *Client) CheckEntitlement(ctx context.Context, key string) (*LicenseInfo
 	}, nil
 }
 
+// MintAgentToken calls AuthService.MintAgentToken on the sidecar.
+// Fields: 1=parent_token, 2=target_service, 3=scopes (repeated), 4=ttl_seconds (varint), 5=tenant_id
+func (c *Client) MintAgentToken(ctx context.Context, parentToken, targetService string, scopes []string, ttlSeconds int) (*AgentToken, error) {
+	payload := encodeString(1, parentToken) + encodeString(2, targetService)
+	for _, s := range scopes {
+		payload += encodeString(3, s)
+	}
+	payload += string(encodeVarintField(4, uint64(ttlSeconds))) + encodeString(5, c.config.TenantID) //nolint:gosec
+	req := grpcFrame([]byte(payload))
+
+	var respBytes []byte
+	err := c.conn.Invoke(ctx, "/coresdk.v1.AuthService/MintAgentToken", req, &respBytes)
+	if err != nil {
+		if c.config.FailMode == "open" {
+			return &AgentToken{Token: "fail-open-agent-token", ExpiresInSeconds: ttlSeconds, AgentChain: []string{targetService}}, nil
+		}
+		return nil, fmt.Errorf("coresdk: MintAgentToken: %w", err)
+	}
+
+	body := grpcUnframe(respBytes)
+	fields := decodeFields(body)
+	return &AgentToken{
+		Token:            decodeString(fields, 1),
+		ExpiresInSeconds: int(decodeInt64(fields, 2)), //nolint:gosec
+		AgentChain:       decodeRepeatedString(fields, 3),
+	}, nil
+}
+
+// CheckEgress calls EgressService.CheckEgress on the sidecar.
+// Fields: 1=url, 2=tenant_id, 3=service_name
+func (c *Client) CheckEgress(ctx context.Context, rawURL string) (*EgressDecision, error) {
+	payload := encodeString(1, rawURL) + encodeString(2, c.config.TenantID) + encodeString(3, c.config.ServiceName)
+	req := grpcFrame([]byte(payload))
+
+	var respBytes []byte
+	err := c.conn.Invoke(ctx, "/coresdk.v1.EgressService/CheckEgress", req, &respBytes)
+	if err != nil {
+		if c.config.FailMode == "open" {
+			return &EgressDecision{Allowed: true}, nil
+		}
+		return nil, fmt.Errorf("coresdk: CheckEgress: %w", err)
+	}
+
+	body := grpcUnframe(respBytes)
+	fields := decodeFields(body)
+	return &EgressDecision{
+		Allowed: decodeBool(fields, 1),
+		Reason:  decodeString(fields, 2),
+	}, nil
+}
+
 // Close tears down the underlying gRPC connection.
 func (c *Client) Close() error {
 	return c.conn.Close()
@@ -235,6 +286,13 @@ func (c *Client) Close() error {
 // ---------------------------------------------------------------------------
 // Minimal protobuf wire codec
 // ---------------------------------------------------------------------------
+
+// encodeVarintField encodes a protobuf varint field (wire type 0).
+func encodeVarintField(fieldNum int, value uint64) []byte {
+	tag := varint(uint64(fieldNum<<3 | 0)) //nolint:gosec
+	val := varint(value)
+	return append(tag, val...)
+}
 
 func encodeString(fieldNum int, value string) string {
 	if value == "" {

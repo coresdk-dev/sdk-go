@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 // MockConfig configures MockSDK behavior for tests.
@@ -44,6 +45,9 @@ type MockSDK struct {
 	FlagCalls           []string
 	EntitlementCalls    []string
 	RevokedTokens       map[string]bool
+	ExplainCalls        []string
+	MintAgentTokenCalls []string
+	EgressCalls         []string
 }
 
 // NewMockSDK creates a MockSDK. AllowAll defaults to true (DenyAll=false).
@@ -156,6 +160,30 @@ func (m *MockSDK) CheckEntitlement(_ context.Context, key string) (*LicenseInfo,
 		return &LicenseInfo{Allowed: false}, nil
 	}
 	return &LicenseInfo{Allowed: true, Plan: "enterprise", Features: []string{key}}, nil
+}
+
+// ExplainAuthorize mock — returns an allowed ExplainResult for any token.
+func (m *MockSDK) ExplainAuthorize(_ context.Context, token string) (*ExplainResult, error) {
+	m.ExplainCalls = append(m.ExplainCalls, token)
+	return &ExplainResult{Outcome: "allowed", Auth: map[string]interface{}{}}, nil
+}
+
+// MintAgentToken mock — returns a synthetic agent token.
+func (m *MockSDK) MintAgentToken(_ context.Context, _, targetService string, _ []string, _ time.Duration) (*AgentToken, error) {
+	m.MintAgentTokenCalls = append(m.MintAgentTokenCalls, targetService)
+	if m.cfg.DenyAll {
+		return nil, fmt.Errorf("coresdk: mock denied")
+	}
+	return &AgentToken{Token: "mock-agent-token", ExpiresInSeconds: 300, AgentChain: []string{targetService}}, nil
+}
+
+// CheckEgress mock — returns allowed=true unless DenyAll.
+func (m *MockSDK) CheckEgress(_ context.Context, rawURL string) (*EgressDecision, error) {
+	m.EgressCalls = append(m.EgressCalls, rawURL)
+	if m.cfg.DenyAll {
+		return &EgressDecision{Allowed: false, Reason: "mock denied"}, nil
+	}
+	return &EgressDecision{Allowed: true}, nil
 }
 
 // AssertNoPII fails t if any span attribute value contains unredacted PII-like patterns

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 )
 
 // SDK is the main entry point. Initialize once per process.
@@ -211,6 +212,96 @@ func (s *SDK) CheckEntitlement(ctx context.Context, key string) (*LicenseInfo, e
 		return &LicenseInfo{Allowed: true}, nil
 	}
 	return result, nil
+}
+
+// ExplainAuthorize validates a token and returns a structured explanation of the decision.
+// Always returns an ExplainResult (never an error) — fail-open by design.
+func (s *SDK) ExplainAuthorize(ctx context.Context, token string) (*ExplainResult, error) {
+	claims, err := s.Authorize(ctx, token)
+	if err != nil {
+		return &ExplainResult{
+			Outcome: "denied",
+			Auth:    map[string]interface{}{"error": err.Error()},
+		}, nil
+	}
+	subject := ""
+	if claims != nil {
+		subject = claims.Subject
+	}
+	return &ExplainResult{
+		Outcome: "allowed",
+		Auth:    map[string]interface{}{"subject": subject, "allowed": true},
+	}, nil
+}
+
+// MintAgentToken mints a short-lived scoped JWT for agent-to-agent calls.
+// ttl is clamped to [1, 300] seconds.
+func (s *SDK) MintAgentToken(ctx context.Context, parentToken, targetService string, scopes []string, ttl time.Duration) (*AgentToken, error) {
+	if s.client == nil {
+		if s.Config.FailMode == "closed" {
+			return nil, fmt.Errorf("coresdk: sidecar unreachable (fail-closed)")
+		}
+		slog.Warn("coresdk: mint_agent_token fail-open (no client)")
+		return &AgentToken{Token: "fail-open-agent-token", ExpiresInSeconds: 300, AgentChain: []string{targetService}}, nil
+	}
+	ttlSecs := int(ttl.Seconds())
+	if ttlSecs <= 0 || ttlSecs > 300 {
+		ttlSecs = 300
+	}
+	result, err := s.client.MintAgentToken(ctx, parentToken, targetService, scopes, ttlSecs)
+	if err != nil {
+		if s.Config.FailMode == "closed" {
+			return nil, fmt.Errorf("coresdk: mint_agent_token failed (fail-closed): %w", err)
+		}
+		slog.Warn("coresdk: mint_agent_token fail-open", "error", err)
+		return &AgentToken{Token: "fail-open-agent-token", ExpiresInSeconds: 300, AgentChain: []string{targetService}}, nil
+	}
+	return result, nil
+}
+
+// CheckEgress checks whether an outbound URL is safe (SSRF protection).
+// Returns allowed=true if the sidecar is unreachable (fail-open).
+func (s *SDK) CheckEgress(ctx context.Context, rawURL string) (*EgressDecision, error) {
+	if s.client == nil {
+		if s.Config.FailMode == "closed" {
+			return nil, fmt.Errorf("coresdk: sidecar unreachable (fail-closed)")
+		}
+		slog.Warn("coresdk: check_egress fail-open (no client)")
+		return &EgressDecision{Allowed: true}, nil
+	}
+	result, err := s.client.CheckEgress(ctx, rawURL)
+	if err != nil {
+		if s.Config.FailMode == "closed" {
+			return nil, fmt.Errorf("coresdk: check_egress failed (fail-closed): %w", err)
+		}
+		slog.Warn("coresdk: check_egress fail-open", "error", err)
+		return &EgressDecision{Allowed: true}, nil
+	}
+	return result, nil
+}
+
+// ExplainResult contains a structured explanation of an auth decision.
+type ExplainResult struct {
+	RequestID string                 `json:"request_id"`
+	Outcome   string                 `json:"outcome"` // "allowed" | "denied"
+	Auth      map[string]interface{} `json:"auth"`
+	Policy    map[string]interface{} `json:"policy"`
+	RateLimit map[string]interface{} `json:"rate_limit"`
+	Masking   map[string]interface{} `json:"masking"`
+	LatencyMs float64                `json:"latency_ms"`
+}
+
+// AgentToken is a short-lived scoped JWT for agent-to-agent delegation.
+type AgentToken struct {
+	Token            string   `json:"token"`
+	ExpiresInSeconds int      `json:"expires_in_seconds"`
+	AgentChain       []string `json:"agent_chain"`
+}
+
+// EgressDecision is the result of an outbound URL safety check.
+type EgressDecision struct {
+	Allowed bool   `json:"allowed"`
+	Reason  string `json:"reason"`
 }
 
 // RateLimitDecision holds the result of a rate limit check.
