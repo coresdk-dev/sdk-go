@@ -755,6 +755,112 @@ func (x *ValidateSamlAssertionResponse) GetError() *ProblemDetail {
 	return nil
 }
 
+type RefreshTokenRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// SENSITIVE — the refresh JWT (typ="refresh", 7-day expiry).
+	RefreshToken  string `protobuf:"bytes,1,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RefreshTokenRequest) Reset() {
+	*x = RefreshTokenRequest{}
+	mi := &file_coresdk_v1_auth_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RefreshTokenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RefreshTokenRequest) ProtoMessage() {}
+
+func (x *RefreshTokenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_coresdk_v1_auth_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RefreshTokenRequest.ProtoReflect.Descriptor instead.
+func (*RefreshTokenRequest) Descriptor() ([]byte, []int) {
+	return file_coresdk_v1_auth_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *RefreshTokenRequest) GetRefreshToken() string {
+	if x != nil {
+		return x.RefreshToken
+	}
+	return ""
+}
+
+type RefreshTokenResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// New access JWT (typ="access", 1hr expiry). No new refresh token — after 7 days user must login again.
+	Token         string         `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	ExpiresAt     int64          `protobuf:"varint,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	Error         *ProblemDetail `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RefreshTokenResponse) Reset() {
+	*x = RefreshTokenResponse{}
+	mi := &file_coresdk_v1_auth_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RefreshTokenResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RefreshTokenResponse) ProtoMessage() {}
+
+func (x *RefreshTokenResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_coresdk_v1_auth_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RefreshTokenResponse.ProtoReflect.Descriptor instead.
+func (*RefreshTokenResponse) Descriptor() ([]byte, []int) {
+	return file_coresdk_v1_auth_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *RefreshTokenResponse) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+func (x *RefreshTokenResponse) GetExpiresAt() int64 {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return 0
+}
+
+func (x *RefreshTokenResponse) GetError() *ProblemDetail {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
 var File_coresdk_v1_auth_proto protoreflect.FileDescriptor
 
 const file_coresdk_v1_auth_proto_rawDesc = "" +
@@ -816,14 +922,22 @@ const file_coresdk_v1_auth_proto_rawDesc = "" +
 	"\x05email\x18\x03 \x01(\tR\x05email\x12\x16\n" +
 	"\x06groups\x18\x04 \x03(\tR\x06groups\x12'\n" +
 	"\x0fattributes_json\x18\x05 \x01(\tR\x0eattributesJson\x12/\n" +
-	"\x05error\x18\x06 \x01(\v2\x19.coresdk.v1.ProblemDetailR\x05error2\xf9\x03\n" +
+	"\x05error\x18\x06 \x01(\v2\x19.coresdk.v1.ProblemDetailR\x05error\":\n" +
+	"\x13RefreshTokenRequest\x12#\n" +
+	"\rrefresh_token\x18\x01 \x01(\tR\frefreshToken\"|\n" +
+	"\x14RefreshTokenResponse\x12\x14\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\x12\x1d\n" +
+	"\n" +
+	"expires_at\x18\x02 \x01(\x03R\texpiresAt\x12/\n" +
+	"\x05error\x18\x03 \x01(\v2\x19.coresdk.v1.ProblemDetailR\x05error2\xcc\x04\n" +
 	"\vAuthService\x12T\n" +
 	"\rValidateToken\x12 .coresdk.v1.ValidateTokenRequest\x1a!.coresdk.v1.ValidateTokenResponse\x12H\n" +
 	"\tAuthorize\x12\x1c.coresdk.v1.AuthorizeRequest\x1a\x1d.coresdk.v1.AuthorizeResponse\x12B\n" +
 	"\aGetJwks\x12\x1a.coresdk.v1.GetJwksRequest\x1a\x1b.coresdk.v1.GetJwksResponse\x12N\n" +
 	"\vRevokeToken\x12\x1e.coresdk.v1.RevokeTokenRequest\x1a\x1f.coresdk.v1.RevokeTokenResponse\x12H\n" +
 	"\tIsRevoked\x12\x1c.coresdk.v1.IsRevokedRequest\x1a\x1d.coresdk.v1.IsRevokedResponse\x12l\n" +
-	"\x15ValidateSAMLAssertion\x12(.coresdk.v1.ValidateSamlAssertionRequest\x1a).coresdk.v1.ValidateSamlAssertionResponseB.Z,github.com/coresdk-dev/sdk-go/gen/coresdk/v1b\x06proto3"
+	"\x15ValidateSAMLAssertion\x12(.coresdk.v1.ValidateSamlAssertionRequest\x1a).coresdk.v1.ValidateSamlAssertionResponse\x12Q\n" +
+	"\fRefreshToken\x12\x1f.coresdk.v1.RefreshTokenRequest\x1a .coresdk.v1.RefreshTokenResponseB.Z,github.com/coresdk-dev/sdk-go/gen/coresdk/v1b\x06proto3"
 
 var (
 	file_coresdk_v1_auth_proto_rawDescOnce sync.Once
@@ -837,7 +951,7 @@ func file_coresdk_v1_auth_proto_rawDescGZIP() []byte {
 	return file_coresdk_v1_auth_proto_rawDescData
 }
 
-var file_coresdk_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_coresdk_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_coresdk_v1_auth_proto_goTypes = []any{
 	(*ValidateTokenRequest)(nil),          // 0: coresdk.v1.ValidateTokenRequest
 	(*ValidateTokenResponse)(nil),         // 1: coresdk.v1.ValidateTokenResponse
@@ -851,40 +965,45 @@ var file_coresdk_v1_auth_proto_goTypes = []any{
 	(*IsRevokedResponse)(nil),             // 9: coresdk.v1.IsRevokedResponse
 	(*ValidateSamlAssertionRequest)(nil),  // 10: coresdk.v1.ValidateSamlAssertionRequest
 	(*ValidateSamlAssertionResponse)(nil), // 11: coresdk.v1.ValidateSamlAssertionResponse
-	nil,                                   // 12: coresdk.v1.ValidateTokenResponse.ClaimsEntry
-	nil,                                   // 13: coresdk.v1.AuthorizeRequest.ContextEntry
-	(*TenantContext)(nil),                 // 14: coresdk.v1.TenantContext
-	(*RequestMetadata)(nil),               // 15: coresdk.v1.RequestMetadata
-	(*ProblemDetail)(nil),                 // 16: coresdk.v1.ProblemDetail
+	(*RefreshTokenRequest)(nil),           // 12: coresdk.v1.RefreshTokenRequest
+	(*RefreshTokenResponse)(nil),          // 13: coresdk.v1.RefreshTokenResponse
+	nil,                                   // 14: coresdk.v1.ValidateTokenResponse.ClaimsEntry
+	nil,                                   // 15: coresdk.v1.AuthorizeRequest.ContextEntry
+	(*TenantContext)(nil),                 // 16: coresdk.v1.TenantContext
+	(*RequestMetadata)(nil),               // 17: coresdk.v1.RequestMetadata
+	(*ProblemDetail)(nil),                 // 18: coresdk.v1.ProblemDetail
 }
 var file_coresdk_v1_auth_proto_depIdxs = []int32{
-	14, // 0: coresdk.v1.ValidateTokenRequest.tenant:type_name -> coresdk.v1.TenantContext
-	15, // 1: coresdk.v1.ValidateTokenRequest.metadata:type_name -> coresdk.v1.RequestMetadata
-	12, // 2: coresdk.v1.ValidateTokenResponse.claims:type_name -> coresdk.v1.ValidateTokenResponse.ClaimsEntry
-	16, // 3: coresdk.v1.ValidateTokenResponse.error:type_name -> coresdk.v1.ProblemDetail
-	14, // 4: coresdk.v1.AuthorizeRequest.tenant:type_name -> coresdk.v1.TenantContext
-	15, // 5: coresdk.v1.AuthorizeRequest.metadata:type_name -> coresdk.v1.RequestMetadata
-	13, // 6: coresdk.v1.AuthorizeRequest.context:type_name -> coresdk.v1.AuthorizeRequest.ContextEntry
-	16, // 7: coresdk.v1.AuthorizeResponse.error:type_name -> coresdk.v1.ProblemDetail
-	14, // 8: coresdk.v1.GetJwksRequest.tenant:type_name -> coresdk.v1.TenantContext
-	16, // 9: coresdk.v1.ValidateSamlAssertionResponse.error:type_name -> coresdk.v1.ProblemDetail
-	0,  // 10: coresdk.v1.AuthService.ValidateToken:input_type -> coresdk.v1.ValidateTokenRequest
-	2,  // 11: coresdk.v1.AuthService.Authorize:input_type -> coresdk.v1.AuthorizeRequest
-	4,  // 12: coresdk.v1.AuthService.GetJwks:input_type -> coresdk.v1.GetJwksRequest
-	6,  // 13: coresdk.v1.AuthService.RevokeToken:input_type -> coresdk.v1.RevokeTokenRequest
-	8,  // 14: coresdk.v1.AuthService.IsRevoked:input_type -> coresdk.v1.IsRevokedRequest
-	10, // 15: coresdk.v1.AuthService.ValidateSAMLAssertion:input_type -> coresdk.v1.ValidateSamlAssertionRequest
-	1,  // 16: coresdk.v1.AuthService.ValidateToken:output_type -> coresdk.v1.ValidateTokenResponse
-	3,  // 17: coresdk.v1.AuthService.Authorize:output_type -> coresdk.v1.AuthorizeResponse
-	5,  // 18: coresdk.v1.AuthService.GetJwks:output_type -> coresdk.v1.GetJwksResponse
-	7,  // 19: coresdk.v1.AuthService.RevokeToken:output_type -> coresdk.v1.RevokeTokenResponse
-	9,  // 20: coresdk.v1.AuthService.IsRevoked:output_type -> coresdk.v1.IsRevokedResponse
-	11, // 21: coresdk.v1.AuthService.ValidateSAMLAssertion:output_type -> coresdk.v1.ValidateSamlAssertionResponse
-	16, // [16:22] is the sub-list for method output_type
-	10, // [10:16] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	16, // 0: coresdk.v1.ValidateTokenRequest.tenant:type_name -> coresdk.v1.TenantContext
+	17, // 1: coresdk.v1.ValidateTokenRequest.metadata:type_name -> coresdk.v1.RequestMetadata
+	14, // 2: coresdk.v1.ValidateTokenResponse.claims:type_name -> coresdk.v1.ValidateTokenResponse.ClaimsEntry
+	18, // 3: coresdk.v1.ValidateTokenResponse.error:type_name -> coresdk.v1.ProblemDetail
+	16, // 4: coresdk.v1.AuthorizeRequest.tenant:type_name -> coresdk.v1.TenantContext
+	17, // 5: coresdk.v1.AuthorizeRequest.metadata:type_name -> coresdk.v1.RequestMetadata
+	15, // 6: coresdk.v1.AuthorizeRequest.context:type_name -> coresdk.v1.AuthorizeRequest.ContextEntry
+	18, // 7: coresdk.v1.AuthorizeResponse.error:type_name -> coresdk.v1.ProblemDetail
+	16, // 8: coresdk.v1.GetJwksRequest.tenant:type_name -> coresdk.v1.TenantContext
+	18, // 9: coresdk.v1.ValidateSamlAssertionResponse.error:type_name -> coresdk.v1.ProblemDetail
+	18, // 10: coresdk.v1.RefreshTokenResponse.error:type_name -> coresdk.v1.ProblemDetail
+	0,  // 11: coresdk.v1.AuthService.ValidateToken:input_type -> coresdk.v1.ValidateTokenRequest
+	2,  // 12: coresdk.v1.AuthService.Authorize:input_type -> coresdk.v1.AuthorizeRequest
+	4,  // 13: coresdk.v1.AuthService.GetJwks:input_type -> coresdk.v1.GetJwksRequest
+	6,  // 14: coresdk.v1.AuthService.RevokeToken:input_type -> coresdk.v1.RevokeTokenRequest
+	8,  // 15: coresdk.v1.AuthService.IsRevoked:input_type -> coresdk.v1.IsRevokedRequest
+	10, // 16: coresdk.v1.AuthService.ValidateSAMLAssertion:input_type -> coresdk.v1.ValidateSamlAssertionRequest
+	12, // 17: coresdk.v1.AuthService.RefreshToken:input_type -> coresdk.v1.RefreshTokenRequest
+	1,  // 18: coresdk.v1.AuthService.ValidateToken:output_type -> coresdk.v1.ValidateTokenResponse
+	3,  // 19: coresdk.v1.AuthService.Authorize:output_type -> coresdk.v1.AuthorizeResponse
+	5,  // 20: coresdk.v1.AuthService.GetJwks:output_type -> coresdk.v1.GetJwksResponse
+	7,  // 21: coresdk.v1.AuthService.RevokeToken:output_type -> coresdk.v1.RevokeTokenResponse
+	9,  // 22: coresdk.v1.AuthService.IsRevoked:output_type -> coresdk.v1.IsRevokedResponse
+	11, // 23: coresdk.v1.AuthService.ValidateSAMLAssertion:output_type -> coresdk.v1.ValidateSamlAssertionResponse
+	13, // 24: coresdk.v1.AuthService.RefreshToken:output_type -> coresdk.v1.RefreshTokenResponse
+	18, // [18:25] is the sub-list for method output_type
+	11, // [11:18] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_coresdk_v1_auth_proto_init() }
@@ -899,7 +1018,7 @@ func file_coresdk_v1_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_coresdk_v1_auth_proto_rawDesc), len(file_coresdk_v1_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

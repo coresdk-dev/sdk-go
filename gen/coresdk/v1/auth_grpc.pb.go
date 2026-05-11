@@ -25,6 +25,7 @@ const (
 	AuthService_RevokeToken_FullMethodName           = "/coresdk.v1.AuthService/RevokeToken"
 	AuthService_IsRevoked_FullMethodName             = "/coresdk.v1.AuthService/IsRevoked"
 	AuthService_ValidateSAMLAssertion_FullMethodName = "/coresdk.v1.AuthService/ValidateSAMLAssertion"
+	AuthService_RefreshToken_FullMethodName          = "/coresdk.v1.AuthService/RefreshToken"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -37,6 +38,9 @@ type AuthServiceClient interface {
 	RevokeToken(ctx context.Context, in *RevokeTokenRequest, opts ...grpc.CallOption) (*RevokeTokenResponse, error)
 	IsRevoked(ctx context.Context, in *IsRevokedRequest, opts ...grpc.CallOption) (*IsRevokedResponse, error)
 	ValidateSAMLAssertion(ctx context.Context, in *ValidateSamlAssertionRequest, opts ...grpc.CallOption) (*ValidateSamlAssertionResponse, error)
+	// Exchange a valid refresh JWT (typ="refresh") for a new access JWT + new refresh JWT.
+	// Sidecar validates the refresh token locally (same HMAC key), then issues new tokens.
+	RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*RefreshTokenResponse, error)
 }
 
 type authServiceClient struct {
@@ -107,6 +111,16 @@ func (c *authServiceClient) ValidateSAMLAssertion(ctx context.Context, in *Valid
 	return out, nil
 }
 
+func (c *authServiceClient) RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*RefreshTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RefreshTokenResponse)
+	err := c.cc.Invoke(ctx, AuthService_RefreshToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServiceServer is the server API for AuthService service.
 // All implementations should embed UnimplementedAuthServiceServer
 // for forward compatibility.
@@ -117,6 +131,9 @@ type AuthServiceServer interface {
 	RevokeToken(context.Context, *RevokeTokenRequest) (*RevokeTokenResponse, error)
 	IsRevoked(context.Context, *IsRevokedRequest) (*IsRevokedResponse, error)
 	ValidateSAMLAssertion(context.Context, *ValidateSamlAssertionRequest) (*ValidateSamlAssertionResponse, error)
+	// Exchange a valid refresh JWT (typ="refresh") for a new access JWT + new refresh JWT.
+	// Sidecar validates the refresh token locally (same HMAC key), then issues new tokens.
+	RefreshToken(context.Context, *RefreshTokenRequest) (*RefreshTokenResponse, error)
 }
 
 // UnimplementedAuthServiceServer should be embedded to have
@@ -143,6 +160,9 @@ func (UnimplementedAuthServiceServer) IsRevoked(context.Context, *IsRevokedReque
 }
 func (UnimplementedAuthServiceServer) ValidateSAMLAssertion(context.Context, *ValidateSamlAssertionRequest) (*ValidateSamlAssertionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ValidateSAMLAssertion not implemented")
+}
+func (UnimplementedAuthServiceServer) RefreshToken(context.Context, *RefreshTokenRequest) (*RefreshTokenResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RefreshToken not implemented")
 }
 func (UnimplementedAuthServiceServer) testEmbeddedByValue() {}
 
@@ -272,6 +292,24 @@ func _AuthService_ValidateSAMLAssertion_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_RefreshToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).RefreshToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_RefreshToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).RefreshToken(ctx, req.(*RefreshTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -302,6 +340,10 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateSAMLAssertion",
 			Handler:    _AuthService_ValidateSAMLAssertion_Handler,
+		},
+		{
+			MethodName: "RefreshToken",
+			Handler:    _AuthService_RefreshToken_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

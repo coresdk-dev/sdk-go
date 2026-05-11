@@ -74,12 +74,21 @@ func (x *GetConfigRequest) GetMetadata() *RequestMetadata {
 }
 
 type ConfigSnapshot struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
-	Values        map[string]string      `protobuf:"bytes,2,rep,name=values,proto3" json:"values,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	UpdatedAt     int64                  `protobuf:"varint,3,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Version   string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	Values    map[string]string      `protobuf:"bytes,2,rep,name=values,proto3" json:"values,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	UpdatedAt int64                  `protobuf:"varint,3,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// Storage backend the control plane is running. One of:
+	//
+	//	"sqlite" | "postgres" | "mongodb" | ""
+	//
+	// Empty string means the backend is unknown or the server was
+	// built before pluggable DATABASE_URL support. Added alongside
+	// the pluggable storage feature so clients can optionally
+	// introspect what the server is using.
+	StorageBackend string `protobuf:"bytes,4,opt,name=storage_backend,json=storageBackend,proto3" json:"storage_backend,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ConfigSnapshot) Reset() {
@@ -131,6 +140,13 @@ func (x *ConfigSnapshot) GetUpdatedAt() int64 {
 		return x.UpdatedAt
 	}
 	return 0
+}
+
+func (x *ConfigSnapshot) GetStorageBackend() string {
+	if x != nil {
+		return x.StorageBackend
+	}
+	return ""
 }
 
 type GetConfigResponse struct {
@@ -245,12 +261,13 @@ const file_coresdk_v1_config_proto_rawDesc = "" +
 	"coresdk.v1\x1a\x17coresdk/v1/common.proto\"~\n" +
 	"\x10GetConfigRequest\x121\n" +
 	"\x06tenant\x18\x01 \x01(\v2\x19.coresdk.v1.TenantContextR\x06tenant\x127\n" +
-	"\bmetadata\x18\x02 \x01(\v2\x1b.coresdk.v1.RequestMetadataR\bmetadata\"\xc4\x01\n" +
+	"\bmetadata\x18\x02 \x01(\v2\x1b.coresdk.v1.RequestMetadataR\bmetadata\"\xed\x01\n" +
 	"\x0eConfigSnapshot\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12>\n" +
 	"\x06values\x18\x02 \x03(\v2&.coresdk.v1.ConfigSnapshot.ValuesEntryR\x06values\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\x03 \x01(\x03R\tupdatedAt\x1a9\n" +
+	"updated_at\x18\x03 \x01(\x03R\tupdatedAt\x12'\n" +
+	"\x0fstorage_backend\x18\x04 \x01(\tR\x0estorageBackend\x1a9\n" +
 	"\vValuesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"|\n" +
