@@ -166,6 +166,46 @@ docker run --rm \
 
 See the [Getting Started guide](GETTING-STARTED.md) for the full setup walkthrough.
 
+## Jobs (containerised long-running work)
+
+`Client` exposes the sidecar's `JobService` for async K8s-backed
+container workloads with typed lifecycle events, blob-store I/O, and
+RBAC-gated secret injection.
+
+```go
+sdk, _ := coresdk.FromEnv()
+
+job, _ := sdk.SubmitJob(ctx, coresdk.SubmitJobRequest{
+    Kind:           "claude-cli",
+    Image:          "ghcr.io/zysec/cpod-claude-cli:latest",
+    Command:        []string{"claude"},
+    InlineFiles:    map[string][]byte{"prompt.md": []byte("hi")},
+    SecretBundles:  []string{"anthropic-prod"},
+    UserID:         "alice@example.com",
+    TimeoutSeconds: 600,
+})
+
+evs, _ := sdk.WatchJob(ctx, job.JobID)
+for ev := range evs {
+    switch ev.Kind {
+    case coresdk.JobEventProgress:
+        log.Println(ev.Stage, ev.Detail)
+    case coresdk.JobEventSucceeded:
+        out, _ := sdk.GetJobOutput(ctx, job.JobID, 900)
+        for _, f := range out.Files {
+            log.Println(f.Key, f.PresignedURL)
+        }
+    case coresdk.JobEventFailed:
+        log.Fatal(ev.Error)
+    }
+}
+```
+
+`WatchJob` and `StreamJobLogs` return typed Go channels; closing the
+context cancels the underlying gRPC stream. Public types: `Job`,
+`JobEvent` with `JobEventKind` discriminator, `LogLine`, `OutputFile`,
+`JobOutput`, `SecretRef`, `SubmitJobRequest`.
+
 ## License
 
 See [LICENSE](../LICENSE).
