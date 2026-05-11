@@ -1,17 +1,22 @@
 package coresdk
 
-// JobService bindings — mirrors sdk-python/coresdk/_jobs.py. Manual prost-style
-// wire encoding so we don't need protoc in the build.
+// JobService bindings — uses the generated protobuf types in
+// gen/coresdk/v1 via protoc-gen-go + protoc-gen-go-grpc, marshalled with
+// google.golang.org/protobuf.
 //
-// See proto/coresdk/v1/jobs.proto for the canonical message layout.
+// Migrated from a manual prost-style wire codec (commit eaf3dbe) to the
+// generated client on 2026-05-12. Public types in this file (Job, JobEvent
+// with the JobEventKind discriminator, LogLine, etc.) are kept as the
+// Go-idiomatic surface — the generated types live in
+// github.com/coresdk-dev/sdk-go/gen/coresdk/v1 and are converted at the
+// boundary so callers never see raw protobuf message types.
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 
-	"google.golang.org/grpc"
+	pb "github.com/coresdk-dev/sdk-go/gen/coresdk/v1"
 )
 
 // JobState mirrors coresdk.v1.JobState.
@@ -43,23 +48,23 @@ type SecretRef struct {
 // Job is the snapshot of a job returned by Submit/Get/Cancel/List and every
 // progress tick of Watch.
 type Job struct {
-	JobID                string
-	Kind                 string
-	Image                string
-	State                JobState
-	ExitCode             int32
-	Error                string
-	InputS3URI           string
-	OutputS3URI          string
-	LogsS3URI            string
-	CreatedAt            int64
-	StartedAt            int64
-	FinishedAt           int64
-	TenantID             string
-	UserID               string
-	K8sNamespace         string
-	K8sJobName           string
-	ResolvedSecretNames  []string
+	JobID               string
+	Kind                string
+	Image               string
+	State               JobState
+	ExitCode            int32
+	Error               string
+	InputS3URI          string
+	OutputS3URI         string
+	LogsS3URI           string
+	CreatedAt           int64
+	StartedAt           int64
+	FinishedAt          int64
+	TenantID            string
+	UserID              string
+	K8sNamespace        string
+	K8sJobName          string
+	ResolvedSecretNames []string
 }
 
 // JobEventKind discriminates JobEvent variants.
@@ -116,301 +121,244 @@ type JobOutput struct {
 
 // SubmitJobRequest contains every field of coresdk.v1.SubmitJobRequest.
 type SubmitJobRequest struct {
-	Kind            string
-	Image           string
-	Command         []string
-	Args            []string
-	Env             map[string]string
-	InlineFiles     map[string][]byte
-	InputS3URI      string
-	SecretRefs      []SecretRef
-	SecretBundles   []string
-	TimeoutSeconds  uint32
-	CaptureLogs     bool
-	CaptureOutput   bool
-	OutputPrefix    string
-	TenantID        string
-	UserID          string
+	Kind           string
+	Image          string
+	Command        []string
+	Args           []string
+	Env            map[string]string
+	InlineFiles    map[string][]byte
+	InputS3URI     string
+	SecretRefs     []SecretRef
+	SecretBundles  []string
+	TimeoutSeconds uint32
+	CaptureLogs    bool
+	CaptureOutput  bool
+	OutputPrefix   string
+	TenantID       string
+	UserID         string
 }
 
-// ── wire helpers ────────────────────────────────────────────────────────────
+// ── conversions: SDK ↔ protobuf ─────────────────────────────────────────────
 
-func encodeBytes(fieldNum int, value []byte) []byte {
-	tag := varint(uint64(fieldNum<<3 | 2)) //nolint:gosec
-	length := varint(uint64(len(value)))
-	out := make([]byte, 0, len(tag)+len(length)+len(value))
-	out = append(out, tag...)
-	out = append(out, length...)
-	out = append(out, value...)
-	return out
-}
-
-func encodeMessageBytes(fieldNum int, payload []byte) []byte {
-	return encodeBytes(fieldNum, payload)
-}
-
-func encodeStringMapEntry(key, value string) []byte {
-	return []byte(encodeString(1, key) + encodeString(2, value))
-}
-
-func encodeStringMap(fieldNum int, m map[string]string) []byte {
-	var out []byte
-	for k, v := range m {
-		out = append(out, encodeMessageBytes(fieldNum, encodeStringMapEntry(k, v))...)
-	}
-	return out
-}
-
-func encodeBytesMap(fieldNum int, m map[string][]byte) []byte {
-	var out []byte
-	for k, v := range m {
-		entry := append([]byte(encodeString(1, k)), encodeBytes(2, v)...)
-		out = append(out, encodeMessageBytes(fieldNum, entry)...)
-	}
-	return out
-}
-
-func encodeTenant(fieldNum int, tenantID string) []byte {
+func (c *Client) tenantContext(tenantID string) *pb.TenantContext {
 	if tenantID == "" {
 		return nil
 	}
-	return encodeMessageBytes(fieldNum, []byte(encodeString(1, tenantID)))
+	return &pb.TenantContext{TenantId: tenantID}
 }
 
-func encodeSecretRef(r SecretRef) []byte {
-	payload := []byte(encodeString(1, r.Name) +
-		encodeString(2, r.Provider) +
-		encodeString(3, r.Path) +
-		encodeString(4, r.Version))
-	switch r.Delivery {
+func deliveryFromString(s string) pb.Delivery {
+	switch s {
 	case "env":
-		payload = append(payload, encodeVarintField(5, 1)...)
+		return pb.Delivery_DELIVERY_ENV
 	case "file":
-		payload = append(payload, encodeVarintField(5, 2)...)
+		return pb.Delivery_DELIVERY_FILE
+	default:
+		return pb.Delivery_DELIVERY_UNSPECIFIED
 	}
-	return encodeMessageBytes(7, payload)
 }
 
-func encodeInput(inline map[string][]byte, inputS3URI string) []byte {
-	if len(inline) > 0 {
-		inner := encodeMessageBytes(1, encodeBytesMap(1, inline))
-		return encodeMessageBytes(6, inner)
+func toSubmitJobRequest(req SubmitJobRequest, defaultTenant string) *pb.SubmitJobRequest {
+	tenant := req.TenantID
+	if tenant == "" {
+		tenant = defaultTenant
 	}
-	if inputS3URI != "" {
-		return encodeMessageBytes(6, []byte(encodeString(2, inputS3URI)))
+	pbReq := &pb.SubmitJobRequest{
+		Kind:           req.Kind,
+		Image:          req.Image,
+		Command:        req.Command,
+		Args:           req.Args,
+		Env:            req.Env,
+		TimeoutSeconds: req.TimeoutSeconds,
+		CaptureLogs:    req.CaptureLogs,
+		CaptureOutput:  req.CaptureOutput,
+		OutputPrefix:   req.OutputPrefix,
+		UserId:         req.UserID,
 	}
-	return nil
-}
-
-func encodeSubmitJobRequest(req SubmitJobRequest) []byte {
-	var p []byte
-	p = append(p, []byte(encodeString(1, req.Kind))...)
-	p = append(p, []byte(encodeString(2, req.Image))...)
-	for _, c := range req.Command {
-		p = append(p, []byte(encodeString(3, c))...)
+	if tenant != "" {
+		pbReq.Tenant = &pb.TenantContext{TenantId: tenant}
 	}
-	for _, a := range req.Args {
-		p = append(p, []byte(encodeString(4, a))...)
+	if len(req.InlineFiles) > 0 {
+		pbReq.Input = &pb.Input{
+			Source: &pb.Input_Inline{Inline: &pb.InlineFiles{Files: req.InlineFiles}},
+		}
+	} else if req.InputS3URI != "" {
+		pbReq.Input = &pb.Input{Source: &pb.Input_InputS3Uri{InputS3Uri: req.InputS3URI}}
 	}
-	p = append(p, encodeStringMap(5, req.Env)...)
-	p = append(p, encodeInput(req.InlineFiles, req.InputS3URI)...)
 	for _, r := range req.SecretRefs {
-		p = append(p, encodeSecretRef(r)...)
+		pbReq.SecretRefs = append(pbReq.SecretRefs, &pb.SecretRef{
+			Name:     r.Name,
+			Provider: r.Provider,
+			Path:     r.Path,
+			Version:  r.Version,
+			Delivery: deliveryFromString(r.Delivery),
+		})
 	}
-	for _, b := range req.SecretBundles {
-		p = append(p, []byte(encodeString(8, b))...)
-	}
-	if req.TimeoutSeconds != 0 {
-		p = append(p, encodeVarintField(10, uint64(req.TimeoutSeconds))...)
-	}
-	if req.CaptureLogs {
-		p = append(p, encodeVarintField(11, 1)...)
-	}
-	if req.CaptureOutput {
-		p = append(p, encodeVarintField(12, 1)...)
-	}
-	if req.OutputPrefix != "" {
-		p = append(p, []byte(encodeString(13, req.OutputPrefix))...)
-	}
-	p = append(p, encodeTenant(14, req.TenantID)...)
-	p = append(p, []byte(encodeString(15, req.UserID))...)
-	return p
+	pbReq.SecretBundles = append([]string{}, req.SecretBundles...)
+	return pbReq
 }
 
-func decodeJob(body []byte) Job {
-	f := decodeFields(body)
-	stateInt := decodeInt64(f, 4)
+func fromPbJob(j *pb.Job) *Job {
+	if j == nil {
+		return &Job{}
+	}
 	var state JobState
-	switch stateInt {
-	case 2:
+	switch j.State {
+	case pb.JobState_JOB_STATE_SCHEDULING:
 		state = JobStateScheduling
-	case 3:
+	case pb.JobState_JOB_STATE_RUNNING:
 		state = JobStateRunning
-	case 4:
+	case pb.JobState_JOB_STATE_SUCCEEDED:
 		state = JobStateSucceeded
-	case 5:
+	case pb.JobState_JOB_STATE_FAILED:
 		state = JobStateFailed
-	case 6:
+	case pb.JobState_JOB_STATE_CANCELLED:
 		state = JobStateCancelled
 	default:
 		state = JobStatePending
 	}
-	return Job{
-		JobID:               decodeString(f, 1),
-		Kind:                decodeString(f, 2),
-		Image:               decodeString(f, 3),
+	return &Job{
+		JobID:               j.JobId,
+		Kind:                j.Kind,
+		Image:               j.Image,
 		State:               state,
-		ExitCode:            int32(decodeInt64(f, 5)), //nolint:gosec
-		Error:               decodeString(f, 6),
-		InputS3URI:          decodeString(f, 7),
-		OutputS3URI:         decodeString(f, 8),
-		LogsS3URI:           decodeString(f, 9),
-		CreatedAt:           decodeInt64(f, 10),
-		StartedAt:           decodeInt64(f, 11),
-		FinishedAt:          decodeInt64(f, 12),
-		TenantID:            decodeString(f, 13),
-		UserID:              decodeString(f, 14),
-		K8sNamespace:        decodeString(f, 15),
-		K8sJobName:          decodeString(f, 16),
-		ResolvedSecretNames: decodeRepeatedString(f, 17),
+		ExitCode:            j.ExitCode,
+		Error:               j.Error,
+		InputS3URI:          j.InputS3Uri,
+		OutputS3URI:         j.OutputS3Uri,
+		LogsS3URI:           j.LogsS3Uri,
+		CreatedAt:           j.CreatedAt,
+		StartedAt:           j.StartedAt,
+		FinishedAt:          j.FinishedAt,
+		TenantID:            j.TenantId,
+		UserID:              j.UserId,
+		K8sNamespace:        j.K8SNamespace,
+		K8sJobName:          j.K8SJobName,
+		ResolvedSecretNames: append([]string{}, j.ResolvedSecretNames...),
 	}
 }
 
-func decodeJobEvent(body []byte) JobEvent {
-	f := decodeFields(body)
-	ev := JobEvent{
-		JobID: decodeString(f, 1),
-		TS:    decodeInt64(f, 2),
+func fromPbJobEvent(ev *pb.JobEvent, jobID string) JobEvent {
+	out := JobEvent{
+		JobID: jobID,
+		TS:    ev.Ts,
 		Kind:  JobEventUnknown,
 	}
-	if subs, ok := f[10]; ok && len(subs) > 0 {
-		sf := decodeFields(subs[0])
-		ev.Kind = JobEventCreated
-		ev.Image = decodeString(sf, 1)
-	} else if subs, ok := f[11]; ok && len(subs) > 0 {
-		sf := decodeFields(subs[0])
-		ev.Kind = JobEventScheduled
-		ev.NodeName = decodeString(sf, 1)
-	} else if _, ok := f[12]; ok {
-		ev.Kind = JobEventStarted
-	} else if subs, ok := f[13]; ok && len(subs) > 0 {
-		sf := decodeFields(subs[0])
-		ev.Kind = JobEventProgress
-		ev.Stage = decodeString(sf, 1)
-		ev.Percent = uint32(decodeInt64(sf, 2)) //nolint:gosec
-		raw := decodeString(sf, 3)
-		if raw != "" {
+	switch e := ev.Event.(type) {
+	case *pb.JobEvent_Created:
+		out.Kind = JobEventCreated
+		out.Image = e.Created.Image
+	case *pb.JobEvent_Scheduled:
+		out.Kind = JobEventScheduled
+		out.NodeName = e.Scheduled.NodeName
+	case *pb.JobEvent_Started:
+		out.Kind = JobEventStarted
+	case *pb.JobEvent_Progress:
+		out.Kind = JobEventProgress
+		out.Stage = e.Progress.Stage
+		out.Percent = e.Progress.Percent
+		if raw := e.Progress.DetailJson; raw != "" {
 			var detail map[string]any
 			if err := json.Unmarshal([]byte(raw), &detail); err == nil {
-				ev.Detail = detail
+				out.Detail = detail
 			} else {
-				ev.Detail = map[string]any{"raw": raw}
+				out.Detail = map[string]any{"raw": raw}
 			}
 		}
-	} else if subs, ok := f[14]; ok && len(subs) > 0 {
-		sf := decodeFields(subs[0])
-		ev.Kind = JobEventSucceeded
-		ev.ExitCode = int32(decodeInt64(sf, 1)) //nolint:gosec
-		ev.OutputS3URI = decodeString(sf, 2)
-	} else if subs, ok := f[15]; ok && len(subs) > 0 {
-		sf := decodeFields(subs[0])
-		ev.Kind = JobEventFailed
-		ev.ExitCode = int32(decodeInt64(sf, 1)) //nolint:gosec
-		ev.Error = decodeString(sf, 2)
-	} else if subs, ok := f[16]; ok && len(subs) > 0 {
-		sf := decodeFields(subs[0])
-		ev.Kind = JobEventCancelled
-		ev.Reason = decodeString(sf, 1)
+	case *pb.JobEvent_Succeeded:
+		out.Kind = JobEventSucceeded
+		out.ExitCode = e.Succeeded.ExitCode
+		out.OutputS3URI = e.Succeeded.OutputS3Uri
+	case *pb.JobEvent_Failed:
+		out.Kind = JobEventFailed
+		out.ExitCode = e.Failed.ExitCode
+		out.Error = e.Failed.Error
+	case *pb.JobEvent_Cancelled:
+		out.Kind = JobEventCancelled
+		out.Reason = e.Cancelled.Reason
 	}
-	return ev
+	return out
 }
 
-func decodeLogLine(body []byte) LogLine {
-	f := decodeFields(body)
+func fromPbLogLine(line *pb.LogLine, jobID string) LogLine {
 	stream := "unspecified"
-	switch decodeInt64(f, 2) {
-	case 1:
+	switch line.Stream {
+	case pb.LogStream_LOG_STREAM_STDOUT:
 		stream = "stdout"
-	case 2:
+	case pb.LogStream_LOG_STREAM_STDERR:
 		stream = "stderr"
 	}
-	return LogLine{TS: decodeInt64(f, 1), Stream: stream, Line: decodeString(f, 3)}
+	return LogLine{JobID: jobID, TS: line.Ts, Stream: stream, Line: line.Line}
 }
 
-func decodeJobOutput(body []byte) JobOutput {
-	f := decodeFields(body)
-	var files []OutputFile
-	for _, raw := range f[1] {
-		sf := decodeFields(raw)
-		files = append(files, OutputFile{
-			Key:          decodeString(sf, 1),
-			S3URI:        decodeString(sf, 2),
-			PresignedURL: decodeString(sf, 3),
-			Size:         decodeInt64(sf, 4),
-			ContentType:  decodeString(sf, 5),
+func fromPbJobOutput(o *pb.JobOutput) *JobOutput {
+	out := &JobOutput{Files: make([]OutputFile, 0, len(o.Files))}
+	for _, f := range o.Files {
+		out.Files = append(out.Files, OutputFile{
+			Key:          f.Key,
+			S3URI:        f.S3Uri,
+			PresignedURL: f.PresignedUrl,
+			Size:         f.Size,
+			ContentType:  f.ContentType,
 		})
 	}
-	return JobOutput{Files: files}
+	return out
 }
 
 // ── client surface ──────────────────────────────────────────────────────────
 
-// SubmitJob accepts a job, returns the immediate snapshot in pending state.
-// Subscribe to progress via WatchJob.
+func (c *Client) jobsClient() pb.JobServiceClient {
+	return pb.NewJobServiceClient(c.conn)
+}
+
+// SubmitJob accepts a job and returns the immediate snapshot in pending state.
 func (c *Client) SubmitJob(ctx context.Context, req SubmitJobRequest) (*Job, error) {
-	if req.TenantID == "" {
-		req.TenantID = c.config.TenantID
-	}
-	payload := encodeSubmitJobRequest(req)
-	frame := grpcFrame(payload)
-	var resp []byte
-	if err := c.conn.Invoke(ctx, "/coresdk.v1.JobService/SubmitJob", frame, &resp); err != nil {
+	pbReq := toSubmitJobRequest(req, c.config.TenantID)
+	resp, err := c.jobsClient().SubmitJob(ctx, pbReq)
+	if err != nil {
 		return nil, fmt.Errorf("coresdk: SubmitJob: %w", err)
 	}
-	j := decodeJob(grpcUnframe(resp))
-	return &j, nil
+	return fromPbJob(resp), nil
 }
 
 // GetJob returns the current state of a single job.
 func (c *Client) GetJob(ctx context.Context, jobID string) (*Job, error) {
-	payload := []byte(encodeString(1, jobID))
-	payload = append(payload, encodeTenant(2, c.config.TenantID)...)
-	var resp []byte
-	if err := c.conn.Invoke(ctx, "/coresdk.v1.JobService/GetJob", grpcFrame(payload), &resp); err != nil {
+	resp, err := c.jobsClient().GetJob(ctx, &pb.GetJobRequest{
+		JobId:  jobID,
+		Tenant: c.tenantContext(c.config.TenantID),
+	})
+	if err != nil {
 		return nil, fmt.Errorf("coresdk: GetJob: %w", err)
 	}
-	j := decodeJob(grpcUnframe(resp))
-	return &j, nil
+	return fromPbJob(resp), nil
 }
 
 // CancelJob cooperatively cancels a running job. Idempotent on terminal jobs.
 func (c *Client) CancelJob(ctx context.Context, jobID, reason string) (*Job, error) {
-	payload := []byte(encodeString(1, jobID) + encodeString(2, reason))
-	payload = append(payload, encodeTenant(3, c.config.TenantID)...)
-	var resp []byte
-	if err := c.conn.Invoke(ctx, "/coresdk.v1.JobService/CancelJob", grpcFrame(payload), &resp); err != nil {
+	resp, err := c.jobsClient().CancelJob(ctx, &pb.CancelJobRequest{
+		JobId:  jobID,
+		Reason: reason,
+		Tenant: c.tenantContext(c.config.TenantID),
+	})
+	if err != nil {
 		return nil, fmt.Errorf("coresdk: CancelJob: %w", err)
 	}
-	j := decodeJob(grpcUnframe(resp))
-	return &j, nil
+	return fromPbJob(resp), nil
 }
 
 // ListJobs returns up to `limit` jobs for the caller's tenant. `state` empty = all.
 func (c *Client) ListJobs(ctx context.Context, state string, limit uint32) ([]Job, error) {
-	payload := encodeTenant(1, c.config.TenantID)
-	payload = append(payload, []byte(encodeString(2, state))...)
-	if limit != 0 {
-		payload = append(payload, encodeVarintField(3, uint64(limit))...)
-	}
-	var resp []byte
-	if err := c.conn.Invoke(ctx, "/coresdk.v1.JobService/ListJobs", grpcFrame(payload), &resp); err != nil {
+	resp, err := c.jobsClient().ListJobs(ctx, &pb.ListJobsRequest{
+		Tenant:      c.tenantContext(c.config.TenantID),
+		StateFilter: state,
+		Limit:       limit,
+	})
+	if err != nil {
 		return nil, fmt.Errorf("coresdk: ListJobs: %w", err)
 	}
-	body := grpcUnframe(resp)
-	f := decodeFields(body)
-	out := make([]Job, 0, len(f[1]))
-	for _, raw := range f[1] {
-		out = append(out, decodeJob(raw))
+	out := make([]Job, 0, len(resp.Jobs))
+	for _, j := range resp.Jobs {
+		out = append(out, *fromPbJob(j))
 	}
 	return out, nil
 }
@@ -418,58 +366,43 @@ func (c *Client) ListJobs(ctx context.Context, state string, limit uint32) ([]Jo
 // GetJobOutput returns the output file listing with short-lived presigned URLs.
 // `presignTTLSeconds` of 0 uses the server default (900s).
 func (c *Client) GetJobOutput(ctx context.Context, jobID string, presignTTLSeconds uint32) (*JobOutput, error) {
-	payload := []byte(encodeString(1, jobID))
-	if presignTTLSeconds != 0 {
-		payload = append(payload, encodeVarintField(2, uint64(presignTTLSeconds))...)
-	}
-	payload = append(payload, encodeTenant(3, c.config.TenantID)...)
-	var resp []byte
-	if err := c.conn.Invoke(ctx, "/coresdk.v1.JobService/GetJobOutput", grpcFrame(payload), &resp); err != nil {
+	resp, err := c.jobsClient().GetJobOutput(ctx, &pb.OutputRequest{
+		JobId:             jobID,
+		PresignTtlSeconds: presignTTLSeconds,
+		Tenant:            c.tenantContext(c.config.TenantID),
+	})
+	if err != nil {
 		return nil, fmt.Errorf("coresdk: GetJobOutput: %w", err)
 	}
-	out := decodeJobOutput(grpcUnframe(resp))
-	return &out, nil
+	return fromPbJobOutput(resp), nil
 }
 
 // WatchJob returns a channel of JobEvents until the job reaches a terminal
 // state. The channel closes on terminal events; closing `ctx` cancels the
 // underlying gRPC stream.
 func (c *Client) WatchJob(ctx context.Context, jobID string) (<-chan JobEvent, error) {
-	payload := []byte(encodeString(1, jobID))
-	payload = append(payload, encodeTenant(3, c.config.TenantID)...)
-	desc := &grpc.StreamDesc{
-		StreamName:    "WatchJob",
-		ServerStreams: true,
-	}
-	stream, err := c.conn.NewStream(ctx, desc, "/coresdk.v1.JobService/WatchJob")
+	stream, err := c.jobsClient().WatchJob(ctx, &pb.WatchJobRequest{
+		JobId:  jobID,
+		Tenant: c.tenantContext(c.config.TenantID),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("coresdk: WatchJob: %w", err)
-	}
-	if err := stream.SendMsg(grpcFrame(payload)); err != nil {
-		return nil, fmt.Errorf("coresdk: WatchJob send: %w", err)
-	}
-	if err := stream.CloseSend(); err != nil {
-		return nil, fmt.Errorf("coresdk: WatchJob close: %w", err)
 	}
 	ch := make(chan JobEvent, 8)
 	go func() {
 		defer close(ch)
 		for {
-			var msg []byte
-			if err := stream.RecvMsg(&msg); err != nil {
-				if err == io.EOF {
-					return
-				}
+			ev, err := stream.Recv()
+			if err != nil {
 				return
 			}
-			ev := decodeJobEvent(grpcUnframe(msg))
-			ev.JobID = jobID
+			out := fromPbJobEvent(ev, jobID)
 			select {
-			case ch <- ev:
+			case ch <- out:
 			case <-ctx.Done():
 				return
 			}
-			if ev.Kind == JobEventSucceeded || ev.Kind == JobEventFailed || ev.Kind == JobEventCancelled {
+			if out.Kind == JobEventSucceeded || out.Kind == JobEventFailed || out.Kind == JobEventCancelled {
 				return
 			}
 		}
@@ -479,40 +412,26 @@ func (c *Client) WatchJob(ctx context.Context, jobID string) (<-chan JobEvent, e
 
 // StreamJobLogs returns a channel of LogLines tailed from the job's container.
 func (c *Client) StreamJobLogs(ctx context.Context, jobID string, follow bool, tailLines uint32) (<-chan LogLine, error) {
-	payload := []byte(encodeString(1, jobID))
-	if follow {
-		payload = append(payload, encodeVarintField(2, 1)...)
-	}
-	if tailLines != 0 {
-		payload = append(payload, encodeVarintField(3, uint64(tailLines))...)
-	}
-	payload = append(payload, encodeTenant(4, c.config.TenantID)...)
-	desc := &grpc.StreamDesc{
-		StreamName:    "GetJobLogs",
-		ServerStreams: true,
-	}
-	stream, err := c.conn.NewStream(ctx, desc, "/coresdk.v1.JobService/GetJobLogs")
+	stream, err := c.jobsClient().GetJobLogs(ctx, &pb.LogsRequest{
+		JobId:     jobID,
+		Follow:    follow,
+		TailLines: tailLines,
+		Tenant:    c.tenantContext(c.config.TenantID),
+	})
 	if err != nil {
-		return nil, fmt.Errorf("coresdk: GetJobLogs: %w", err)
-	}
-	if err := stream.SendMsg(grpcFrame(payload)); err != nil {
-		return nil, fmt.Errorf("coresdk: GetJobLogs send: %w", err)
-	}
-	if err := stream.CloseSend(); err != nil {
-		return nil, fmt.Errorf("coresdk: GetJobLogs close: %w", err)
+		return nil, fmt.Errorf("coresdk: StreamJobLogs: %w", err)
 	}
 	ch := make(chan LogLine, 32)
 	go func() {
 		defer close(ch)
 		for {
-			var msg []byte
-			if err := stream.RecvMsg(&msg); err != nil {
+			line, err := stream.Recv()
+			if err != nil {
 				return
 			}
-			line := decodeLogLine(grpcUnframe(msg))
-			line.JobID = jobID
+			out := fromPbLogLine(line, jobID)
 			select {
-			case ch <- line:
+			case ch <- out:
 			case <-ctx.Done():
 				return
 			}
