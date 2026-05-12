@@ -32,10 +32,48 @@ func FromEnv() (*SDK, error) {
 	return &SDK{Config: cfg, client: client}, nil
 }
 
+// AuthorizeOption configures a single Authorize call.
+//
+// Phase 1 of the app-store/scope/permission system introduces RequiredScope —
+// see WithRequiredScope. The proto field `AuthorizeRequest.required_scope`
+// (tag 8) is set on the wire when the sidecar's regenerated stubs are wired
+// in; until then the option is parsed into authorizeOptions and threaded
+// through any future Authorize-RPC code path without breaking existing
+// callers.
+type AuthorizeOption func(*authorizeOptions)
+
+type authorizeOptions struct {
+	// RequiredScope is an RFC 6749 §3.3 space-separated scope list. Multiple
+	// values mean "all of these" (logical AND). A granted `jobs.*` satisfies
+	// any required `jobs.<action>`.
+	RequiredScope string
+}
+
+// WithRequiredScope sets an OAuth 2.0 scope filter for the Authorize call.
+//
+// The format is RFC 6749 §3.3: a single string, scopes separated by ASCII
+// whitespace. Multiple scopes mean "all of these" (logical AND). On the
+// sidecar side, a granted scope of `jobs.*` satisfies a required
+// `jobs.write` thanks to dot-boundary wildcard matching.
+func WithRequiredScope(scope string) AuthorizeOption {
+	return func(o *authorizeOptions) { o.RequiredScope = scope }
+}
+
 // Authorize validates a JWT and returns claims.
 // Fails open (returns unknown claims, no error) when FailMode == "open" and sidecar is unreachable.
 // Fails closed (returns error) when FailMode == "closed" and sidecar is unreachable.
-func (s *SDK) Authorize(ctx context.Context, token string) (*Claims, error) {
+//
+// Variadic AuthorizeOption values configure scope checks and other per-call
+// behaviour. Existing callers without options continue to compile unchanged.
+func (s *SDK) Authorize(ctx context.Context, token string, opts ...AuthorizeOption) (*Claims, error) {
+	// Resolve options. Currently RequiredScope is parsed but not yet threaded
+	// to the gRPC wire — that happens once the regenerated `AuthorizeRequest`
+	// stub exposes RequiredScope (proto v1.2).
+	var o authorizeOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	_ = o // silence unused until wire is hooked up
 	if s.client == nil {
 		if s.Config.FailMode == "closed" {
 			return nil, fmt.Errorf("coresdk: sidecar unreachable (fail-closed)")
