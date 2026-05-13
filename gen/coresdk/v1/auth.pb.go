@@ -187,7 +187,13 @@ type AuthorizeRequest struct {
 	// SENSITIVE -- bearer JWT for callers that pass a raw token instead of
 	// a pre-resolved subject. Takes precedence over subject when non-empty.
 	// Added in proto v1.1.
-	Token         string `protobuf:"bytes,7,opt,name=token,proto3" json:"token,omitempty"`
+	Token string `protobuf:"bytes,7,opt,name=token,proto3" json:"token,omitempty"`
+	// OAuth 2.0 scope requirement (RFC 6749 sec 3.3). Space-separated list of
+	// scope names; multiple values mean "all of these" (logical AND). When
+	// empty, no scope filter is applied. Wildcard matching at the dot boundary
+	// is supported on the granted side (a granted `jobs.*` satisfies a
+	// required `jobs.write`). Added in proto v1.2.
+	RequiredScope string `protobuf:"bytes,8,opt,name=required_scope,json=requiredScope,proto3" json:"required_scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -267,6 +273,13 @@ func (x *AuthorizeRequest) GetContext() map[string]string {
 func (x *AuthorizeRequest) GetToken() string {
 	if x != nil {
 		return x.Token
+	}
+	return ""
+}
+
+func (x *AuthorizeRequest) GetRequiredScope() string {
+	if x != nil {
+		return x.RequiredScope
 	}
 	return ""
 }
@@ -882,7 +895,7 @@ const file_coresdk_v1_auth_proto_rawDesc = "" +
 	"\x05error\x18\x06 \x01(\v2\x19.coresdk.v1.ProblemDetailR\x05error\x1a9\n" +
 	"\vClaimsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe3\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8a\x03\n" +
 	"\x10AuthorizeRequest\x12\x18\n" +
 	"\asubject\x18\x01 \x01(\tR\asubject\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x12\x1a\n" +
@@ -890,7 +903,8 @@ const file_coresdk_v1_auth_proto_rawDesc = "" +
 	"\x06tenant\x18\x04 \x01(\v2\x19.coresdk.v1.TenantContextR\x06tenant\x127\n" +
 	"\bmetadata\x18\x05 \x01(\v2\x1b.coresdk.v1.RequestMetadataR\bmetadata\x12C\n" +
 	"\acontext\x18\x06 \x03(\v2).coresdk.v1.AuthorizeRequest.ContextEntryR\acontext\x12\x14\n" +
-	"\x05token\x18\a \x01(\tR\x05token\x1a:\n" +
+	"\x05token\x18\a \x01(\tR\x05token\x12%\n" +
+	"\x0erequired_scope\x18\b \x01(\tR\rrequiredScope\x1a:\n" +
 	"\fContextEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"v\n" +
