@@ -19,13 +19,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AuthService_ValidateToken_FullMethodName         = "/coresdk.v1.AuthService/ValidateToken"
-	AuthService_Authorize_FullMethodName             = "/coresdk.v1.AuthService/Authorize"
-	AuthService_GetJwks_FullMethodName               = "/coresdk.v1.AuthService/GetJwks"
-	AuthService_RevokeToken_FullMethodName           = "/coresdk.v1.AuthService/RevokeToken"
-	AuthService_IsRevoked_FullMethodName             = "/coresdk.v1.AuthService/IsRevoked"
-	AuthService_ValidateSAMLAssertion_FullMethodName = "/coresdk.v1.AuthService/ValidateSAMLAssertion"
-	AuthService_RefreshToken_FullMethodName          = "/coresdk.v1.AuthService/RefreshToken"
+	AuthService_ValidateToken_FullMethodName           = "/coresdk.v1.AuthService/ValidateToken"
+	AuthService_Authorize_FullMethodName               = "/coresdk.v1.AuthService/Authorize"
+	AuthService_GetJwks_FullMethodName                 = "/coresdk.v1.AuthService/GetJwks"
+	AuthService_RevokeToken_FullMethodName             = "/coresdk.v1.AuthService/RevokeToken"
+	AuthService_IsRevoked_FullMethodName               = "/coresdk.v1.AuthService/IsRevoked"
+	AuthService_ValidateSAMLAssertion_FullMethodName   = "/coresdk.v1.AuthService/ValidateSAMLAssertion"
+	AuthService_RefreshToken_FullMethodName            = "/coresdk.v1.AuthService/RefreshToken"
+	AuthService_ValidatePlatformContext_FullMethodName = "/coresdk.v1.AuthService/ValidatePlatformContext"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -41,6 +42,14 @@ type AuthServiceClient interface {
 	// Exchange a valid refresh JWT (typ="refresh") for a new access JWT + new refresh JWT.
 	// Sidecar validates the refresh token locally (same HMAC key), then issues new tokens.
 	RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*RefreshTokenResponse, error)
+	// AP-06 (#205): Validate a base64-encoded PlatformContext issued to an
+	// app-store app. The sidecar verifies the HMAC-SHA256 signature using the
+	// app's stored client_secret, checks the issued_at TTL, and filters the
+	// embedded permissions against the current grants in
+	// `core_app_permission_grants` (real-time, not cached). Apps receive the
+	// filtered permission list instead of doing HMAC validation themselves,
+	// which closes the 6-minute revocation window (TTL 300s + 60s skew).
+	ValidatePlatformContext(ctx context.Context, in *ValidatePlatformContextRequest, opts ...grpc.CallOption) (*ValidatePlatformContextResponse, error)
 }
 
 type authServiceClient struct {
@@ -121,6 +130,16 @@ func (c *authServiceClient) RefreshToken(ctx context.Context, in *RefreshTokenRe
 	return out, nil
 }
 
+func (c *authServiceClient) ValidatePlatformContext(ctx context.Context, in *ValidatePlatformContextRequest, opts ...grpc.CallOption) (*ValidatePlatformContextResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidatePlatformContextResponse)
+	err := c.cc.Invoke(ctx, AuthService_ValidatePlatformContext_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServiceServer is the server API for AuthService service.
 // All implementations should embed UnimplementedAuthServiceServer
 // for forward compatibility.
@@ -134,6 +153,14 @@ type AuthServiceServer interface {
 	// Exchange a valid refresh JWT (typ="refresh") for a new access JWT + new refresh JWT.
 	// Sidecar validates the refresh token locally (same HMAC key), then issues new tokens.
 	RefreshToken(context.Context, *RefreshTokenRequest) (*RefreshTokenResponse, error)
+	// AP-06 (#205): Validate a base64-encoded PlatformContext issued to an
+	// app-store app. The sidecar verifies the HMAC-SHA256 signature using the
+	// app's stored client_secret, checks the issued_at TTL, and filters the
+	// embedded permissions against the current grants in
+	// `core_app_permission_grants` (real-time, not cached). Apps receive the
+	// filtered permission list instead of doing HMAC validation themselves,
+	// which closes the 6-minute revocation window (TTL 300s + 60s skew).
+	ValidatePlatformContext(context.Context, *ValidatePlatformContextRequest) (*ValidatePlatformContextResponse, error)
 }
 
 // UnimplementedAuthServiceServer should be embedded to have
@@ -163,6 +190,9 @@ func (UnimplementedAuthServiceServer) ValidateSAMLAssertion(context.Context, *Va
 }
 func (UnimplementedAuthServiceServer) RefreshToken(context.Context, *RefreshTokenRequest) (*RefreshTokenResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RefreshToken not implemented")
+}
+func (UnimplementedAuthServiceServer) ValidatePlatformContext(context.Context, *ValidatePlatformContextRequest) (*ValidatePlatformContextResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidatePlatformContext not implemented")
 }
 func (UnimplementedAuthServiceServer) testEmbeddedByValue() {}
 
@@ -310,6 +340,24 @@ func _AuthService_RefreshToken_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_ValidatePlatformContext_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidatePlatformContextRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).ValidatePlatformContext(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_ValidatePlatformContext_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).ValidatePlatformContext(ctx, req.(*ValidatePlatformContextRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -344,6 +392,10 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RefreshToken",
 			Handler:    _AuthService_RefreshToken_Handler,
+		},
+		{
+			MethodName: "ValidatePlatformContext",
+			Handler:    _AuthService_ValidatePlatformContext_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
