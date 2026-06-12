@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	AuditService_EmitAuditEvent_FullMethodName = "/coresdk.v1.AuditService/EmitAuditEvent"
+	AuditService_EmitAuthEvent_FullMethodName  = "/coresdk.v1.AuditService/EmitAuthEvent"
 	AuditService_QueryAudit_FullMethodName     = "/coresdk.v1.AuditService/QueryAudit"
 )
 
@@ -28,6 +29,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AuditServiceClient interface {
 	EmitAuditEvent(ctx context.Context, in *EmitAuditEventRequest, opts ...grpc.CallOption) (*EmitAuditEventResponse, error)
+	EmitAuthEvent(ctx context.Context, in *AuthEventProto, opts ...grpc.CallOption) (*EmitAuthEventResponse, error)
 	QueryAudit(ctx context.Context, in *QueryAuditRequest, opts ...grpc.CallOption) (*QueryAuditResponse, error)
 }
 
@@ -49,6 +51,16 @@ func (c *auditServiceClient) EmitAuditEvent(ctx context.Context, in *EmitAuditEv
 	return out, nil
 }
 
+func (c *auditServiceClient) EmitAuthEvent(ctx context.Context, in *AuthEventProto, opts ...grpc.CallOption) (*EmitAuthEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EmitAuthEventResponse)
+	err := c.cc.Invoke(ctx, AuditService_EmitAuthEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *auditServiceClient) QueryAudit(ctx context.Context, in *QueryAuditRequest, opts ...grpc.CallOption) (*QueryAuditResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(QueryAuditResponse)
@@ -64,6 +76,7 @@ func (c *auditServiceClient) QueryAudit(ctx context.Context, in *QueryAuditReque
 // for forward compatibility.
 type AuditServiceServer interface {
 	EmitAuditEvent(context.Context, *EmitAuditEventRequest) (*EmitAuditEventResponse, error)
+	EmitAuthEvent(context.Context, *AuthEventProto) (*EmitAuthEventResponse, error)
 	QueryAudit(context.Context, *QueryAuditRequest) (*QueryAuditResponse, error)
 }
 
@@ -76,6 +89,9 @@ type UnimplementedAuditServiceServer struct{}
 
 func (UnimplementedAuditServiceServer) EmitAuditEvent(context.Context, *EmitAuditEventRequest) (*EmitAuditEventResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method EmitAuditEvent not implemented")
+}
+func (UnimplementedAuditServiceServer) EmitAuthEvent(context.Context, *AuthEventProto) (*EmitAuthEventResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method EmitAuthEvent not implemented")
 }
 func (UnimplementedAuditServiceServer) QueryAudit(context.Context, *QueryAuditRequest) (*QueryAuditResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method QueryAudit not implemented")
@@ -118,6 +134,24 @@ func _AuditService_EmitAuditEvent_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuditService_EmitAuthEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuthEventProto)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuditServiceServer).EmitAuthEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuditService_EmitAuthEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuditServiceServer).EmitAuthEvent(ctx, req.(*AuthEventProto))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AuditService_QueryAudit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(QueryAuditRequest)
 	if err := dec(in); err != nil {
@@ -146,6 +180,10 @@ var AuditService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "EmitAuditEvent",
 			Handler:    _AuditService_EmitAuditEvent_Handler,
+		},
+		{
+			MethodName: "EmitAuthEvent",
+			Handler:    _AuditService_EmitAuthEvent_Handler,
 		},
 		{
 			MethodName: "QueryAudit",

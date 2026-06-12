@@ -433,6 +433,333 @@ func (x *QueryAuditResponse) GetEvents() []*AuditEventProto {
 	return nil
 }
 
+// / Unified auth audit event — mirrors the Rust `AuthEvent` struct defined in
+// / `crates/coresdk-events/src/auth_event.rs`. One schema covers user auth,
+// / app auth, federation, permission, OAuth, and secret-access events across
+// / all cPod services.
+type AuthEventProto struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// / UUID v7 (time-ordered) for efficient index scans.
+	EventId string `protobuf:"bytes,1,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
+	// / What happened — wire-format string (e.g. "auth.login.password").
+	EventType string `protobuf:"bytes,2,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
+	// / Which service emitted this event (e.g. "control_plane", "sidecar").
+	Source string `protobuf:"bytes,3,opt,name=source,proto3" json:"source,omitempty"`
+	// / When it happened (Unix epoch milliseconds).
+	Timestamp int64 `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	// / Tenant context — always present for multi-tenant isolation.
+	TenantId string `protobuf:"bytes,5,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	// / What happened to the action: "success", "failure", "blocked", "revoked".
+	Outcome string `protobuf:"bytes,6,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	// ── Subject (who is acting) ──────────────────────────────────────────────
+	// / Subject discriminator: "user", "app", "user_via_app", "anonymous".
+	SubjectKind string `protobuf:"bytes,7,opt,name=subject_kind,json=subjectKind,proto3" json:"subject_kind,omitempty"`
+	// / Primary subject identifier (user_id, app_id, or IP for anonymous).
+	SubjectId string `protobuf:"bytes,8,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
+	// / User email (only for subject_kind = "user" or "user_via_app").
+	SubjectEmail string `protobuf:"bytes,9,opt,name=subject_email,json=subjectEmail,proto3" json:"subject_email,omitempty"`
+	// / OAuth client_id (only for subject_kind = "app" or "user_via_app").
+	SubjectClientId string `protobuf:"bytes,10,opt,name=subject_client_id,json=subjectClientId,proto3" json:"subject_client_id,omitempty"`
+	// / App ID for user_via_app subject kind.
+	SubjectAppId string `protobuf:"bytes,11,opt,name=subject_app_id,json=subjectAppId,proto3" json:"subject_app_id,omitempty"`
+	// ── Resource (what was accessed, optional) ────────────────────────────────
+	// / Resource type (e.g. "tenant", "app", "user", "secret", "policy").
+	ResourceType string `protobuf:"bytes,12,opt,name=resource_type,json=resourceType,proto3" json:"resource_type,omitempty"`
+	// / Resource identifier.
+	ResourceId string `protobuf:"bytes,13,opt,name=resource_id,json=resourceId,proto3" json:"resource_id,omitempty"`
+	// / Action performed on the resource (e.g. "read", "write", "delete").
+	ResourceAction string `protobuf:"bytes,14,opt,name=resource_action,json=resourceAction,proto3" json:"resource_action,omitempty"`
+	// ── Network context ───────────────────────────────────────────────────────
+	// / Client IP address.
+	NetworkIp string `protobuf:"bytes,15,opt,name=network_ip,json=networkIp,proto3" json:"network_ip,omitempty"`
+	// / User-Agent header (if available).
+	NetworkUserAgent string `protobuf:"bytes,16,opt,name=network_user_agent,json=networkUserAgent,proto3" json:"network_user_agent,omitempty"`
+	// / Country code (ISO 3166-1 alpha-2, if geo-IP resolved).
+	NetworkCountry string `protobuf:"bytes,17,opt,name=network_country,json=networkCountry,proto3" json:"network_country,omitempty"`
+	// ── Event-specific metadata ────────────────────────────────────────────────
+	// / Typed per event_type, serialized as JSON.
+	MetadataJson string `protobuf:"bytes,18,opt,name=metadata_json,json=metadataJson,proto3" json:"metadata_json,omitempty"`
+	// ── Correlation ────────────────────────────────────────────────────────────
+	// / Ties related events: login -> token issue -> API calls.
+	SessionId string `protobuf:"bytes,19,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// / Ties to distributed request tracing.
+	RequestId string `protobuf:"bytes,20,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// / For causal chains: this event was caused by another event.
+	ParentEventId string `protobuf:"bytes,21,opt,name=parent_event_id,json=parentEventId,proto3" json:"parent_event_id,omitempty"`
+	// ── OTel correlation ──────────────────────────────────────────────────────
+	// / W3C trace context trace_id (32 hex chars).
+	TraceId string `protobuf:"bytes,22,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
+	// / W3C trace context span_id (16 hex chars).
+	SpanId string `protobuf:"bytes,23,opt,name=span_id,json=spanId,proto3" json:"span_id,omitempty"`
+	// ── Security classification ───────────────────────────────────────────────
+	// / MITRE ATT&CK technique ID (e.g. "T1078" for Valid Accounts).
+	MitreTechniqueId string `protobuf:"bytes,24,opt,name=mitre_technique_id,json=mitreTechniqueId,proto3" json:"mitre_technique_id,omitempty"`
+	// / Severity for security-relevant events: "critical", "high", "medium", "low", "info".
+	Severity      string `protobuf:"bytes,25,opt,name=severity,proto3" json:"severity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuthEventProto) Reset() {
+	*x = AuthEventProto{}
+	mi := &file_coresdk_v1_audit_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuthEventProto) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuthEventProto) ProtoMessage() {}
+
+func (x *AuthEventProto) ProtoReflect() protoreflect.Message {
+	mi := &file_coresdk_v1_audit_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuthEventProto.ProtoReflect.Descriptor instead.
+func (*AuthEventProto) Descriptor() ([]byte, []int) {
+	return file_coresdk_v1_audit_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *AuthEventProto) GetEventId() string {
+	if x != nil {
+		return x.EventId
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetEventType() string {
+	if x != nil {
+		return x.EventType
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+func (x *AuthEventProto) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetOutcome() string {
+	if x != nil {
+		return x.Outcome
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetSubjectKind() string {
+	if x != nil {
+		return x.SubjectKind
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetSubjectId() string {
+	if x != nil {
+		return x.SubjectId
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetSubjectEmail() string {
+	if x != nil {
+		return x.SubjectEmail
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetSubjectClientId() string {
+	if x != nil {
+		return x.SubjectClientId
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetSubjectAppId() string {
+	if x != nil {
+		return x.SubjectAppId
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetResourceType() string {
+	if x != nil {
+		return x.ResourceType
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetResourceId() string {
+	if x != nil {
+		return x.ResourceId
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetResourceAction() string {
+	if x != nil {
+		return x.ResourceAction
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetNetworkIp() string {
+	if x != nil {
+		return x.NetworkIp
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetNetworkUserAgent() string {
+	if x != nil {
+		return x.NetworkUserAgent
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetNetworkCountry() string {
+	if x != nil {
+		return x.NetworkCountry
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetMetadataJson() string {
+	if x != nil {
+		return x.MetadataJson
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetParentEventId() string {
+	if x != nil {
+		return x.ParentEventId
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetTraceId() string {
+	if x != nil {
+		return x.TraceId
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetSpanId() string {
+	if x != nil {
+		return x.SpanId
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetMitreTechniqueId() string {
+	if x != nil {
+		return x.MitreTechniqueId
+	}
+	return ""
+}
+
+func (x *AuthEventProto) GetSeverity() string {
+	if x != nil {
+		return x.Severity
+	}
+	return ""
+}
+
+// / Response for EmitAuthEvent RPC.
+type EmitAuthEventResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// / Whether the event was accepted for processing.
+	Accepted bool `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
+	// / Diagnostic for rejected events.
+	Error         *ProblemDetail `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EmitAuthEventResponse) Reset() {
+	*x = EmitAuthEventResponse{}
+	mi := &file_coresdk_v1_audit_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EmitAuthEventResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EmitAuthEventResponse) ProtoMessage() {}
+
+func (x *EmitAuthEventResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_coresdk_v1_audit_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EmitAuthEventResponse.ProtoReflect.Descriptor instead.
+func (*EmitAuthEventResponse) Descriptor() ([]byte, []int) {
+	return file_coresdk_v1_audit_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *EmitAuthEventResponse) GetAccepted() bool {
+	if x != nil {
+		return x.Accepted
+	}
+	return false
+}
+
+func (x *EmitAuthEventResponse) GetError() *ProblemDetail {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
 var File_coresdk_v1_audit_proto protoreflect.FileDescriptor
 
 const file_coresdk_v1_audit_proto_rawDesc = "" +
@@ -479,9 +806,46 @@ const file_coresdk_v1_audit_proto_rawDesc = "" +
 	"\vrecord_hash\x18\v \x01(\tR\n" +
 	"recordHash\"I\n" +
 	"\x12QueryAuditResponse\x123\n" +
-	"\x06events\x18\x01 \x03(\v2\x1b.coresdk.v1.AuditEventProtoR\x06events2\xb4\x01\n" +
+	"\x06events\x18\x01 \x03(\v2\x1b.coresdk.v1.AuditEventProtoR\x06events\"\xde\x06\n" +
+	"\x0eAuthEventProto\x12\x19\n" +
+	"\bevent_id\x18\x01 \x01(\tR\aeventId\x12\x1d\n" +
+	"\n" +
+	"event_type\x18\x02 \x01(\tR\teventType\x12\x16\n" +
+	"\x06source\x18\x03 \x01(\tR\x06source\x12\x1c\n" +
+	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\x12\x1b\n" +
+	"\ttenant_id\x18\x05 \x01(\tR\btenantId\x12\x18\n" +
+	"\aoutcome\x18\x06 \x01(\tR\aoutcome\x12!\n" +
+	"\fsubject_kind\x18\a \x01(\tR\vsubjectKind\x12\x1d\n" +
+	"\n" +
+	"subject_id\x18\b \x01(\tR\tsubjectId\x12#\n" +
+	"\rsubject_email\x18\t \x01(\tR\fsubjectEmail\x12*\n" +
+	"\x11subject_client_id\x18\n" +
+	" \x01(\tR\x0fsubjectClientId\x12$\n" +
+	"\x0esubject_app_id\x18\v \x01(\tR\fsubjectAppId\x12#\n" +
+	"\rresource_type\x18\f \x01(\tR\fresourceType\x12\x1f\n" +
+	"\vresource_id\x18\r \x01(\tR\n" +
+	"resourceId\x12'\n" +
+	"\x0fresource_action\x18\x0e \x01(\tR\x0eresourceAction\x12\x1d\n" +
+	"\n" +
+	"network_ip\x18\x0f \x01(\tR\tnetworkIp\x12,\n" +
+	"\x12network_user_agent\x18\x10 \x01(\tR\x10networkUserAgent\x12'\n" +
+	"\x0fnetwork_country\x18\x11 \x01(\tR\x0enetworkCountry\x12#\n" +
+	"\rmetadata_json\x18\x12 \x01(\tR\fmetadataJson\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x13 \x01(\tR\tsessionId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x14 \x01(\tR\trequestId\x12&\n" +
+	"\x0fparent_event_id\x18\x15 \x01(\tR\rparentEventId\x12\x19\n" +
+	"\btrace_id\x18\x16 \x01(\tR\atraceId\x12\x17\n" +
+	"\aspan_id\x18\x17 \x01(\tR\x06spanId\x12,\n" +
+	"\x12mitre_technique_id\x18\x18 \x01(\tR\x10mitreTechniqueId\x12\x1a\n" +
+	"\bseverity\x18\x19 \x01(\tR\bseverity\"d\n" +
+	"\x15EmitAuthEventResponse\x12\x1a\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\x12/\n" +
+	"\x05error\x18\x02 \x01(\v2\x19.coresdk.v1.ProblemDetailR\x05error2\x84\x02\n" +
 	"\fAuditService\x12W\n" +
-	"\x0eEmitAuditEvent\x12!.coresdk.v1.EmitAuditEventRequest\x1a\".coresdk.v1.EmitAuditEventResponse\x12K\n" +
+	"\x0eEmitAuditEvent\x12!.coresdk.v1.EmitAuditEventRequest\x1a\".coresdk.v1.EmitAuditEventResponse\x12N\n" +
+	"\rEmitAuthEvent\x12\x1a.coresdk.v1.AuthEventProto\x1a!.coresdk.v1.EmitAuthEventResponse\x12K\n" +
 	"\n" +
 	"QueryAudit\x12\x1d.coresdk.v1.QueryAuditRequest\x1a\x1e.coresdk.v1.QueryAuditResponseB.Z,github.com/coresdk-dev/sdk-go/gen/coresdk/v1b\x06proto3"
 
@@ -497,27 +861,32 @@ func file_coresdk_v1_audit_proto_rawDescGZIP() []byte {
 	return file_coresdk_v1_audit_proto_rawDescData
 }
 
-var file_coresdk_v1_audit_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_coresdk_v1_audit_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_coresdk_v1_audit_proto_goTypes = []any{
 	(*EmitAuditEventRequest)(nil),  // 0: coresdk.v1.EmitAuditEventRequest
 	(*EmitAuditEventResponse)(nil), // 1: coresdk.v1.EmitAuditEventResponse
 	(*QueryAuditRequest)(nil),      // 2: coresdk.v1.QueryAuditRequest
 	(*AuditEventProto)(nil),        // 3: coresdk.v1.AuditEventProto
 	(*QueryAuditResponse)(nil),     // 4: coresdk.v1.QueryAuditResponse
-	(*ProblemDetail)(nil),          // 5: coresdk.v1.ProblemDetail
+	(*AuthEventProto)(nil),         // 5: coresdk.v1.AuthEventProto
+	(*EmitAuthEventResponse)(nil),  // 6: coresdk.v1.EmitAuthEventResponse
+	(*ProblemDetail)(nil),          // 7: coresdk.v1.ProblemDetail
 }
 var file_coresdk_v1_audit_proto_depIdxs = []int32{
-	5, // 0: coresdk.v1.EmitAuditEventResponse.error:type_name -> coresdk.v1.ProblemDetail
+	7, // 0: coresdk.v1.EmitAuditEventResponse.error:type_name -> coresdk.v1.ProblemDetail
 	3, // 1: coresdk.v1.QueryAuditResponse.events:type_name -> coresdk.v1.AuditEventProto
-	0, // 2: coresdk.v1.AuditService.EmitAuditEvent:input_type -> coresdk.v1.EmitAuditEventRequest
-	2, // 3: coresdk.v1.AuditService.QueryAudit:input_type -> coresdk.v1.QueryAuditRequest
-	1, // 4: coresdk.v1.AuditService.EmitAuditEvent:output_type -> coresdk.v1.EmitAuditEventResponse
-	4, // 5: coresdk.v1.AuditService.QueryAudit:output_type -> coresdk.v1.QueryAuditResponse
-	4, // [4:6] is the sub-list for method output_type
-	2, // [2:4] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	7, // 2: coresdk.v1.EmitAuthEventResponse.error:type_name -> coresdk.v1.ProblemDetail
+	0, // 3: coresdk.v1.AuditService.EmitAuditEvent:input_type -> coresdk.v1.EmitAuditEventRequest
+	5, // 4: coresdk.v1.AuditService.EmitAuthEvent:input_type -> coresdk.v1.AuthEventProto
+	2, // 5: coresdk.v1.AuditService.QueryAudit:input_type -> coresdk.v1.QueryAuditRequest
+	1, // 6: coresdk.v1.AuditService.EmitAuditEvent:output_type -> coresdk.v1.EmitAuditEventResponse
+	6, // 7: coresdk.v1.AuditService.EmitAuthEvent:output_type -> coresdk.v1.EmitAuthEventResponse
+	4, // 8: coresdk.v1.AuditService.QueryAudit:output_type -> coresdk.v1.QueryAuditResponse
+	6, // [6:9] is the sub-list for method output_type
+	3, // [3:6] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_coresdk_v1_audit_proto_init() }
@@ -532,7 +901,7 @@ func file_coresdk_v1_audit_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_coresdk_v1_audit_proto_rawDesc), len(file_coresdk_v1_audit_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
