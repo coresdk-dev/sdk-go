@@ -482,7 +482,8 @@ type AgentSpawnGateResponse struct {
 	Reason  string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
 	// Minted agent JWT (only when allowed = true).
 	// sub: "agent:{agent_id}@user:{user_id}@tenant:{tenant_id}"
-	// typ: "agent"
+	// principal_type: "agent"
+	// grant_type: "agent_spawn"
 	// TTL clamped to [1, 300] seconds.
 	AgentToken string `protobuf:"bytes,3,opt,name=agent_token,json=agentToken,proto3" json:"agent_token,omitempty"`
 	// Effective permissions (user_permissions ∩ agent_capabilities).
