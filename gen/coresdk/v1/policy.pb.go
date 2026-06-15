@@ -90,11 +90,15 @@ func (x *PolicyEvaluateRequest) GetMetadata() *RequestMetadata {
 }
 
 type PolicyEvaluateResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Result        bool                   `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
-	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
-	DryRun        bool                   `protobuf:"varint,3,opt,name=dry_run,json=dryRun,proto3" json:"dry_run,omitempty"`
-	Error         *ProblemDetail         `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Result bool                   `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
+	Reason string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	DryRun bool                   `protobuf:"varint,3,opt,name=dry_run,json=dryRun,proto3" json:"dry_run,omitempty"`
+	Error  *ProblemDetail         `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
+	// Populated when the evaluated rule is data.cyberpod.resource_permission.*
+	// Absent for plain RBAC evaluations; callers check resource_perm != null.
+	// Field numbers 10+ reserved for structured decision extensions.
+	ResourcePerm  *ResourcePermDecision `protobuf:"bytes,10,opt,name=resource_perm,json=resourcePerm,proto3" json:"resource_perm,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -157,6 +161,197 @@ func (x *PolicyEvaluateResponse) GetError() *ProblemDetail {
 	return nil
 }
 
+func (x *PolicyEvaluateResponse) GetResourcePerm() *ResourcePermDecision {
+	if x != nil {
+		return x.ResourcePerm
+	}
+	return nil
+}
+
+// Structured output from data.cyberpod.resource_permission.decision.
+// Carries the full 7-layer decision so callers don't need to parse free-form reason strings.
+type ResourcePermDecision struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// "allow" | "deny" | "mask" | "require_approval"
+	Decision string `protobuf:"bytes,1,opt,name=decision,proto3" json:"decision,omitempty"`
+	// Canonical reason code from the 15-code taxonomy (e.g. "acl_denied", "tenant_mismatch").
+	ReasonCode string `protobuf:"bytes,2,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
+	// Safe-to-log human detail. No secrets or restricted data.
+	ReasonDetail string `protobuf:"bytes,3,opt,name=reason_detail,json=reasonDetail,proto3" json:"reason_detail,omitempty"`
+	// Policy bundle version that produced this decision.
+	PolicyVersion string `protobuf:"bytes,4,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
+	// What the caller must do as a result of an allow/mask decision.
+	Obligations *ResourcePermObligations `protobuf:"bytes,5,opt,name=obligations,proto3" json:"obligations,omitempty"`
+	// Recommended HTTP status to return to the end-user. 200 on allow; 403/451/429 on deny.
+	SafeHttpStatus int32 `protobuf:"varint,6,opt,name=safe_http_status,json=safeHttpStatus,proto3" json:"safe_http_status,omitempty"`
+	// Caller-generated stable correlation ID (recommended format: "pdec_<uuid7>").
+	// Used for audit log correlation and OTel trace linking.
+	DecisionId    string `protobuf:"bytes,7,opt,name=decision_id,json=decisionId,proto3" json:"decision_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResourcePermDecision) Reset() {
+	*x = ResourcePermDecision{}
+	mi := &file_coresdk_v1_policy_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResourcePermDecision) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResourcePermDecision) ProtoMessage() {}
+
+func (x *ResourcePermDecision) ProtoReflect() protoreflect.Message {
+	mi := &file_coresdk_v1_policy_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResourcePermDecision.ProtoReflect.Descriptor instead.
+func (*ResourcePermDecision) Descriptor() ([]byte, []int) {
+	return file_coresdk_v1_policy_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ResourcePermDecision) GetDecision() string {
+	if x != nil {
+		return x.Decision
+	}
+	return ""
+}
+
+func (x *ResourcePermDecision) GetReasonCode() string {
+	if x != nil {
+		return x.ReasonCode
+	}
+	return ""
+}
+
+func (x *ResourcePermDecision) GetReasonDetail() string {
+	if x != nil {
+		return x.ReasonDetail
+	}
+	return ""
+}
+
+func (x *ResourcePermDecision) GetPolicyVersion() string {
+	if x != nil {
+		return x.PolicyVersion
+	}
+	return ""
+}
+
+func (x *ResourcePermDecision) GetObligations() *ResourcePermObligations {
+	if x != nil {
+		return x.Obligations
+	}
+	return nil
+}
+
+func (x *ResourcePermDecision) GetSafeHttpStatus() int32 {
+	if x != nil {
+		return x.SafeHttpStatus
+	}
+	return 0
+}
+
+func (x *ResourcePermDecision) GetDecisionId() string {
+	if x != nil {
+		return x.DecisionId
+	}
+	return ""
+}
+
+type ResourcePermObligations struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// When true, the calling service must emit an audit event for this access.
+	Audit bool `protobuf:"varint,1,opt,name=audit,proto3" json:"audit,omitempty"`
+	// Field classes that must be masked before returning the resource to the caller.
+	// Empty when the decision is "deny" or no field masking applies.
+	MaskFieldClasses []string `protobuf:"bytes,2,rep,name=mask_field_classes,json=maskFieldClasses,proto3" json:"mask_field_classes,omitempty"`
+	// Row limit for list/query results. 0 = no limit.
+	MaxRows int64 `protobuf:"varint,3,opt,name=max_rows,json=maxRows,proto3" json:"max_rows,omitempty"`
+	// RFC-3339 timestamp after which the delegation grant expires. Empty = no expiry.
+	ExpiresAt string `protobuf:"bytes,4,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	// "export_approval" | "share_approval" | "copy_approval" | "" when no approval gate.
+	RequiresApprovalType string `protobuf:"bytes,5,opt,name=requires_approval_type,json=requiresApprovalType,proto3" json:"requires_approval_type,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *ResourcePermObligations) Reset() {
+	*x = ResourcePermObligations{}
+	mi := &file_coresdk_v1_policy_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResourcePermObligations) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResourcePermObligations) ProtoMessage() {}
+
+func (x *ResourcePermObligations) ProtoReflect() protoreflect.Message {
+	mi := &file_coresdk_v1_policy_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResourcePermObligations.ProtoReflect.Descriptor instead.
+func (*ResourcePermObligations) Descriptor() ([]byte, []int) {
+	return file_coresdk_v1_policy_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ResourcePermObligations) GetAudit() bool {
+	if x != nil {
+		return x.Audit
+	}
+	return false
+}
+
+func (x *ResourcePermObligations) GetMaskFieldClasses() []string {
+	if x != nil {
+		return x.MaskFieldClasses
+	}
+	return nil
+}
+
+func (x *ResourcePermObligations) GetMaxRows() int64 {
+	if x != nil {
+		return x.MaxRows
+	}
+	return 0
+}
+
+func (x *ResourcePermObligations) GetExpiresAt() string {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return ""
+}
+
+func (x *ResourcePermObligations) GetRequiresApprovalType() string {
+	if x != nil {
+		return x.RequiresApprovalType
+	}
+	return ""
+}
+
 type WatchPolicyUpdatesRequest struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	Tenant            *TenantContext         `protobuf:"bytes,1,opt,name=tenant,proto3" json:"tenant,omitempty"`
@@ -167,7 +362,7 @@ type WatchPolicyUpdatesRequest struct {
 
 func (x *WatchPolicyUpdatesRequest) Reset() {
 	*x = WatchPolicyUpdatesRequest{}
-	mi := &file_coresdk_v1_policy_proto_msgTypes[2]
+	mi := &file_coresdk_v1_policy_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -179,7 +374,7 @@ func (x *WatchPolicyUpdatesRequest) String() string {
 func (*WatchPolicyUpdatesRequest) ProtoMessage() {}
 
 func (x *WatchPolicyUpdatesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_coresdk_v1_policy_proto_msgTypes[2]
+	mi := &file_coresdk_v1_policy_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -192,7 +387,7 @@ func (x *WatchPolicyUpdatesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchPolicyUpdatesRequest.ProtoReflect.Descriptor instead.
 func (*WatchPolicyUpdatesRequest) Descriptor() ([]byte, []int) {
-	return file_coresdk_v1_policy_proto_rawDescGZIP(), []int{2}
+	return file_coresdk_v1_policy_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *WatchPolicyUpdatesRequest) GetTenant() *TenantContext {
@@ -220,7 +415,7 @@ type PolicyBundleUpdate struct {
 
 func (x *PolicyBundleUpdate) Reset() {
 	*x = PolicyBundleUpdate{}
-	mi := &file_coresdk_v1_policy_proto_msgTypes[3]
+	mi := &file_coresdk_v1_policy_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -232,7 +427,7 @@ func (x *PolicyBundleUpdate) String() string {
 func (*PolicyBundleUpdate) ProtoMessage() {}
 
 func (x *PolicyBundleUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_coresdk_v1_policy_proto_msgTypes[3]
+	mi := &file_coresdk_v1_policy_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -245,7 +440,7 @@ func (x *PolicyBundleUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyBundleUpdate.ProtoReflect.Descriptor instead.
 func (*PolicyBundleUpdate) Descriptor() ([]byte, []int) {
-	return file_coresdk_v1_policy_proto_rawDescGZIP(), []int{3}
+	return file_coresdk_v1_policy_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PolicyBundleUpdate) GetBundleVersion() string {
@@ -280,12 +475,31 @@ const file_coresdk_v1_policy_proto_rawDesc = "" +
 	"\n" +
 	"input_json\x18\x02 \x01(\tR\tinputJson\x121\n" +
 	"\x06tenant\x18\x03 \x01(\v2\x19.coresdk.v1.TenantContextR\x06tenant\x127\n" +
-	"\bmetadata\x18\x04 \x01(\v2\x1b.coresdk.v1.RequestMetadataR\bmetadata\"\x92\x01\n" +
+	"\bmetadata\x18\x04 \x01(\v2\x1b.coresdk.v1.RequestMetadataR\bmetadata\"\xd9\x01\n" +
 	"\x16PolicyEvaluateResponse\x12\x16\n" +
 	"\x06result\x18\x01 \x01(\bR\x06result\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x17\n" +
 	"\adry_run\x18\x03 \x01(\bR\x06dryRun\x12/\n" +
-	"\x05error\x18\x04 \x01(\v2\x19.coresdk.v1.ProblemDetailR\x05error\"~\n" +
+	"\x05error\x18\x04 \x01(\v2\x19.coresdk.v1.ProblemDetailR\x05error\x12E\n" +
+	"\rresource_perm\x18\n" +
+	" \x01(\v2 .coresdk.v1.ResourcePermDecisionR\fresourcePerm\"\xb1\x02\n" +
+	"\x14ResourcePermDecision\x12\x1a\n" +
+	"\bdecision\x18\x01 \x01(\tR\bdecision\x12\x1f\n" +
+	"\vreason_code\x18\x02 \x01(\tR\n" +
+	"reasonCode\x12#\n" +
+	"\rreason_detail\x18\x03 \x01(\tR\freasonDetail\x12%\n" +
+	"\x0epolicy_version\x18\x04 \x01(\tR\rpolicyVersion\x12E\n" +
+	"\vobligations\x18\x05 \x01(\v2#.coresdk.v1.ResourcePermObligationsR\vobligations\x12(\n" +
+	"\x10safe_http_status\x18\x06 \x01(\x05R\x0esafeHttpStatus\x12\x1f\n" +
+	"\vdecision_id\x18\a \x01(\tR\n" +
+	"decisionId\"\xcd\x01\n" +
+	"\x17ResourcePermObligations\x12\x14\n" +
+	"\x05audit\x18\x01 \x01(\bR\x05audit\x12,\n" +
+	"\x12mask_field_classes\x18\x02 \x03(\tR\x10maskFieldClasses\x12\x19\n" +
+	"\bmax_rows\x18\x03 \x01(\x03R\amaxRows\x12\x1d\n" +
+	"\n" +
+	"expires_at\x18\x04 \x01(\tR\texpiresAt\x124\n" +
+	"\x16requires_approval_type\x18\x05 \x01(\tR\x14requiresApprovalType\"~\n" +
 	"\x19WatchPolicyUpdatesRequest\x121\n" +
 	"\x06tenant\x18\x01 \x01(\v2\x19.coresdk.v1.TenantContextR\x06tenant\x12.\n" +
 	"\x13last_bundle_version\x18\x02 \x01(\tR\x11lastBundleVersion\"{\n" +
@@ -312,32 +526,36 @@ func file_coresdk_v1_policy_proto_rawDescGZIP() []byte {
 	return file_coresdk_v1_policy_proto_rawDescData
 }
 
-var file_coresdk_v1_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_coresdk_v1_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_coresdk_v1_policy_proto_goTypes = []any{
 	(*PolicyEvaluateRequest)(nil),     // 0: coresdk.v1.PolicyEvaluateRequest
 	(*PolicyEvaluateResponse)(nil),    // 1: coresdk.v1.PolicyEvaluateResponse
-	(*WatchPolicyUpdatesRequest)(nil), // 2: coresdk.v1.WatchPolicyUpdatesRequest
-	(*PolicyBundleUpdate)(nil),        // 3: coresdk.v1.PolicyBundleUpdate
-	(*TenantContext)(nil),             // 4: coresdk.v1.TenantContext
-	(*RequestMetadata)(nil),           // 5: coresdk.v1.RequestMetadata
-	(*ProblemDetail)(nil),             // 6: coresdk.v1.ProblemDetail
+	(*ResourcePermDecision)(nil),      // 2: coresdk.v1.ResourcePermDecision
+	(*ResourcePermObligations)(nil),   // 3: coresdk.v1.ResourcePermObligations
+	(*WatchPolicyUpdatesRequest)(nil), // 4: coresdk.v1.WatchPolicyUpdatesRequest
+	(*PolicyBundleUpdate)(nil),        // 5: coresdk.v1.PolicyBundleUpdate
+	(*TenantContext)(nil),             // 6: coresdk.v1.TenantContext
+	(*RequestMetadata)(nil),           // 7: coresdk.v1.RequestMetadata
+	(*ProblemDetail)(nil),             // 8: coresdk.v1.ProblemDetail
 }
 var file_coresdk_v1_policy_proto_depIdxs = []int32{
-	4, // 0: coresdk.v1.PolicyEvaluateRequest.tenant:type_name -> coresdk.v1.TenantContext
-	5, // 1: coresdk.v1.PolicyEvaluateRequest.metadata:type_name -> coresdk.v1.RequestMetadata
-	6, // 2: coresdk.v1.PolicyEvaluateResponse.error:type_name -> coresdk.v1.ProblemDetail
-	4, // 3: coresdk.v1.WatchPolicyUpdatesRequest.tenant:type_name -> coresdk.v1.TenantContext
-	0, // 4: coresdk.v1.PolicyService.Evaluate:input_type -> coresdk.v1.PolicyEvaluateRequest
-	0, // 5: coresdk.v1.PolicyService.DryRun:input_type -> coresdk.v1.PolicyEvaluateRequest
-	2, // 6: coresdk.v1.PolicyService.WatchPolicyUpdates:input_type -> coresdk.v1.WatchPolicyUpdatesRequest
-	1, // 7: coresdk.v1.PolicyService.Evaluate:output_type -> coresdk.v1.PolicyEvaluateResponse
-	1, // 8: coresdk.v1.PolicyService.DryRun:output_type -> coresdk.v1.PolicyEvaluateResponse
-	3, // 9: coresdk.v1.PolicyService.WatchPolicyUpdates:output_type -> coresdk.v1.PolicyBundleUpdate
-	7, // [7:10] is the sub-list for method output_type
-	4, // [4:7] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	6, // 0: coresdk.v1.PolicyEvaluateRequest.tenant:type_name -> coresdk.v1.TenantContext
+	7, // 1: coresdk.v1.PolicyEvaluateRequest.metadata:type_name -> coresdk.v1.RequestMetadata
+	8, // 2: coresdk.v1.PolicyEvaluateResponse.error:type_name -> coresdk.v1.ProblemDetail
+	2, // 3: coresdk.v1.PolicyEvaluateResponse.resource_perm:type_name -> coresdk.v1.ResourcePermDecision
+	3, // 4: coresdk.v1.ResourcePermDecision.obligations:type_name -> coresdk.v1.ResourcePermObligations
+	6, // 5: coresdk.v1.WatchPolicyUpdatesRequest.tenant:type_name -> coresdk.v1.TenantContext
+	0, // 6: coresdk.v1.PolicyService.Evaluate:input_type -> coresdk.v1.PolicyEvaluateRequest
+	0, // 7: coresdk.v1.PolicyService.DryRun:input_type -> coresdk.v1.PolicyEvaluateRequest
+	4, // 8: coresdk.v1.PolicyService.WatchPolicyUpdates:input_type -> coresdk.v1.WatchPolicyUpdatesRequest
+	1, // 9: coresdk.v1.PolicyService.Evaluate:output_type -> coresdk.v1.PolicyEvaluateResponse
+	1, // 10: coresdk.v1.PolicyService.DryRun:output_type -> coresdk.v1.PolicyEvaluateResponse
+	5, // 11: coresdk.v1.PolicyService.WatchPolicyUpdates:output_type -> coresdk.v1.PolicyBundleUpdate
+	9, // [9:12] is the sub-list for method output_type
+	6, // [6:9] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_coresdk_v1_policy_proto_init() }
@@ -352,7 +570,7 @@ func file_coresdk_v1_policy_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_coresdk_v1_policy_proto_rawDesc), len(file_coresdk_v1_policy_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
