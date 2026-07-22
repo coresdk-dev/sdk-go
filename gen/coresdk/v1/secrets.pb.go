@@ -31,7 +31,11 @@ type CallerPrincipalsPb struct {
 	Groups   []string               `protobuf:"bytes,3,rep,name=groups,proto3" json:"groups,omitempty"`
 	// Optional. Set to the JWT sub when distinct from user_id. Falls back
 	// to user_id in the resolver if empty.
-	EntityId      string `protobuf:"bytes,4,opt,name=entity_id,json=entityId,proto3" json:"entity_id,omitempty"`
+	EntityId string `protobuf:"bytes,4,opt,name=entity_id,json=entityId,proto3" json:"entity_id,omitempty"`
+	// `backend_teams` memberships (per the `teams` claim). Distinct from
+	// groups; team is its own principal type in the resolver
+	// (precedence: user < team < group < entity < tenant).
+	Teams         []string `protobuf:"bytes,5,rep,name=teams,proto3" json:"teams,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -92,6 +96,13 @@ func (x *CallerPrincipalsPb) GetEntityId() string {
 		return x.EntityId
 	}
 	return ""
+}
+
+func (x *CallerPrincipalsPb) GetTeams() []string {
+	if x != nil {
+		return x.Teams
+	}
+	return nil
 }
 
 // One ad-hoc secret reference. Matches `coresdk_jobs::SecretRef`.
@@ -391,12 +402,13 @@ var File_coresdk_v1_secrets_proto protoreflect.FileDescriptor
 const file_coresdk_v1_secrets_proto_rawDesc = "" +
 	"\n" +
 	"\x18coresdk/v1/secrets.proto\x12\n" +
-	"coresdk.v1\x1a\x17coresdk/v1/common.proto\"\x7f\n" +
+	"coresdk.v1\x1a\x17coresdk/v1/common.proto\"\x95\x01\n" +
 	"\x12CallerPrincipalsPb\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x16\n" +
 	"\x06groups\x18\x03 \x03(\tR\x06groups\x12\x1b\n" +
-	"\tentity_id\x18\x04 \x01(\tR\bentityId\"\x87\x01\n" +
+	"\tentity_id\x18\x04 \x01(\tR\bentityId\x12\x14\n" +
+	"\x05teams\x18\x05 \x03(\tR\x05teams\"\x87\x01\n" +
 	"\vSecretRefPb\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bprovider\x18\x02 \x01(\tR\bprovider\x12\x12\n" +
